@@ -29,6 +29,10 @@
       </select>
       <button id="btnUseSelected">Gebruik selectie</button>
     </div>
+    <div class="row">
+      <button id="btnPlayAgain" style="display:none">Nog een keer</button>
+      <button id="btnStopGame" style="display:none">Stoppen</button>
+    </div>
     <div class="row" style="width:100%">
       <canvas id="gameCanvas" width="700" height="320" style="border:1px solid #ccc; background:#f7f9fc; width:100%; max-width:820px"></canvas>
     </div>
@@ -97,6 +101,8 @@
         const btnHostOnline = document.getElementById('btnHostOnline');
         const btnJoinOnline = document.getElementById('btnJoinOnline');
         const btnBack = document.getElementById('btnBack');
+        const btnPlayAgain = document.getElementById('btnPlayAgain');
+        const btnStopGame = document.getElementById('btnStopGame');
 
         btnHostOnline.addEventListener('click', () => {
           const room = document.getElementById('room').value || 'room-1';
@@ -133,6 +139,8 @@
           btnHostOnline.disabled = false;
           btnJoinOnline.disabled = false;
           btnBack.disabled = true;
+          btnPlayAgain.style.display = 'none';
+          btnStopGame.style.display = 'none';
         });
 
         // Rooms lijst ophalen en gebruiken
@@ -162,9 +170,16 @@
                 .get();
               // Zet om naar array, filter state === matchmaking en sorteer
               const docs = snap.docs
-                .map(d => ({ id: d.id, data: d.data() }))
+                .map(d => ({ id: d.id, data: d.data(), ref: d.ref }))
                 .filter(x => (x.data && x.data.state) === 'matchmaking')
                 .sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+              // Cleanup: verwijder rooms ouder dan 10 minuten
+              const threshold = Date.now() - 10 * 60 * 1000;
+              for (const d of docs) {
+                if ((d.data.updatedAt || 0) < threshold) {
+                  try { await d.ref.delete(); } catch (_) {}
+                }
+              }
               // Render en return vroegtijdig
               if (docs.length === 0) {
                 const opt = document.createElement('option');
@@ -190,21 +205,47 @@
               opt.textContent = '(geen open rooms)';
               select.appendChild(opt);
             } else {
+              const threshold = Date.now() - 10 * 60 * 1000;
+              const removals = [];
               snap.forEach(doc => {
-                const id = doc.id; // stickfight_<room>
-                const room = id.replace(/^stickfight_/, '');
                 const data = doc.data();
-                const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
-                const opt = document.createElement('option');
-                opt.value = room;
-                opt.textContent = label;
-                select.appendChild(opt);
+                if ((data.updatedAt || 0) < threshold) {
+                  removals.push(doc.ref.delete().catch(()=>{}));
+                } else {
+                  const id = doc.id; // stickfight_<room>
+                  const room = id.replace(/^stickfight_/, '');
+                  const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
+                  const opt = document.createElement('option');
+                  opt.value = room;
+                  opt.textContent = label;
+                  select.appendChild(opt);
+                }
               });
+              if (removals.length) { try { await Promise.all(removals); } catch(_) {} }
             }
           } catch (e) {
             console.log('Rooms laden faalde:', e && e.message ? e.message : e);
           }
         }
+
+        // Expose helpers for Game to toggle end-of-game buttons
+        window.__showEndButtons = function(show) {
+          btnPlayAgain.style.display = show ? '' : 'none';
+          btnStopGame.style.display = show ? '' : 'none';
+        };
+
+        btnPlayAgain.addEventListener('click', async () => {
+          if (game && typeof game.resetOnlineGame === 'function') {
+            await game.resetOnlineGame();
+            window.__showEndButtons(false);
+          }
+        });
+        btnStopGame.addEventListener('click', async () => {
+          if (game && typeof game.stopOnlineGame === 'function') {
+            await game.stopOnlineGame();
+            window.__showEndButtons(false);
+          }
+        });
         document.getElementById('btnRefreshRooms').addEventListener('click', refreshRooms);
         document.getElementById('btnUseSelected').addEventListener('click', () => {
           const sel = document.getElementById('roomsList');

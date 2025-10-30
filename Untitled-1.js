@@ -527,7 +527,49 @@ class Game {
       this.playerWins++;
       // pseudo: leaderboard logic here
     }
-    // Option to play again
+    // Host: show options to play again or stop (delete room)
+    try {
+      if (typeof document !== 'undefined' && this.isOnline && this.isHost) {
+        if (typeof window.__showEndButtons === 'function') {
+          window.__showEndButtons(true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  async resetOnlineGame() {
+    if (!this.isOnline || !this.isHost || !this.roomDocRef) return;
+    try {
+      await this.roomDocRef.update({
+        state: 'matchmaking',
+        player1HP: 100,
+        player2HP: 100,
+        p1Action: '',
+        p2Action: '',
+        turn: 1,
+        lastP1Action: '',
+        lastP2Action: '',
+        lastResolvedAt: 0,
+        updatedAt: Date.now()
+      });
+      this.state = 'matchmaking';
+      this.playerHP = 100;
+      this.opponentHP = 100;
+      this.playerAction = null;
+      this.opponentAction = null;
+      this.drawState();
+    } catch (e) {
+      console.log('Reset faalde:', e && e.message ? e.message : e);
+    }
+  }
+
+  async stopOnlineGame() {
+    if (!this.isOnline || !this.isHost) return;
+    try {
+      await this.deleteOnlineRoom();
+    } catch (_) {}
+    this.cleanupNetwork();
+    this.showMenu();
   }
 
   initRenderer() {
