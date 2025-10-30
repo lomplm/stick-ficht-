@@ -151,16 +151,16 @@
                 .limit(50)
                 .get();
             } catch (err) {
-              // Fallback zonder index: haal rauwe data op en sorteer client-side
-              console.log('Index ontbreekt; val terug op client-side sortering. Maak de index aan voor betere performance.');
+              // Fallback zonder index: haal alle rooms op, filter en sorteer client-side
+              console.log('Index ontbreekt; client-side filter/sort wordt gebruikt. Maak de index aan voor betere performance.');
               snap = await window.__db
                 .collection('rooms')
-                .where('state','==','matchmaking')
-                .limit(50)
+                .limit(200)
                 .get();
-              // Zet om naar array om te sorteren
+              // Zet om naar array, filter state === matchmaking en sorteer
               const docs = snap.docs
                 .map(d => ({ id: d.id, data: d.data() }))
+                .filter(x => (x.data && x.data.state) === 'matchmaking')
                 .sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
               // Render en return vroegtijdig
               if (docs.length === 0) {
