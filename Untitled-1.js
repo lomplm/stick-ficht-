@@ -228,6 +228,12 @@ class Game {
       if (allocatedRoom !== this.room) {
         console.log(`Gekozen room is bezet. Nieuwe room toegewezen: ${allocatedRoom}`);
         this.room = allocatedRoom;
+        try {
+          if (typeof document !== 'undefined') {
+            const input = document.getElementById('room');
+            if (input) input.value = this.room;
+          }
+        } catch (_) {}
       }
 
       await this.roomDocRef.set({
