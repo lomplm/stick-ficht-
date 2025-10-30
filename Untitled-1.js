@@ -37,9 +37,10 @@ class Game {
   // Show start menu
   showMenu() {
     // pseudo-code: Draw "Create Game" and "Join Game" buttons
-    // On click -> this.startGame(isHost)
+    // Removed normal local Create/Join; keep only Online options
+    // On click -> this.startOnline(db, room, isHost)
     this.state = 'menu';
-    console.log("Menu: Create Game / Join Game");
+    console.log("Menu: Host Online / Join Online");
     // UI code here
   }
 
@@ -89,6 +90,67 @@ class Game {
     this.roomUnsub = null;
     this.roomDocRef = null;
     this.isOnline = false;
+  }
+
+  // Limit UI interactions to only a Back action while hosting online
+  lockUIForHosting() {
+    try {
+      if (typeof document === 'undefined') return;
+      const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'));
+      for (const el of buttons) {
+        if (el.id === 'btnBack') continue;
+        el.setAttribute('disabled', 'true');
+        el.classList.add('disabled');
+      }
+    } catch (_) {}
+  }
+
+  unlockUI() {
+    try {
+      if (typeof document === 'undefined') return;
+      const buttons = Array.from(document.querySelectorAll('button.disabled, [role="button"].disabled, input.disabled'));
+      for (const el of buttons) {
+        el.removeAttribute('disabled');
+        el.classList.remove('disabled');
+      }
+    } catch (_) {}
+  }
+
+  attachBackHandler() {
+    try {
+      if (typeof document === 'undefined') return;
+      const backBtn = document.getElementById('btnBack');
+      if (backBtn) {
+        backBtn.onclick = () => this.onBack();
+      }
+    } catch (_) {}
+  }
+
+  async onBack() {
+    // If hosting online, delete the room before navigating back
+    if (this.isOnline && this.isHost && this.roomDocRef) {
+      try {
+        await this.deleteOnlineRoom();
+      } catch (e) {
+        console.warn('Kon room niet verwijderen:', e);
+      }
+    }
+    this.cleanupNetwork();
+    this.unlockUI();
+    this.showMenu();
+  }
+
+  async deleteOnlineRoom() {
+    if (!this.roomDocRef) return;
+    try {
+      await this.roomDocRef.delete();
+      console.log(`Room ${this.room} verwijderd.`);
+    } catch (e) {
+      // If delete fails (permissions), mark as gameover as fallback
+      try {
+        await this.roomDocRef.update({ state: 'gameover', updatedAt: Date.now() });
+      } catch (_) {}
+    }
   }
 
   send(message) {
@@ -192,6 +254,9 @@ class Game {
     this.isOnline = true;
     this.state = 'matchmaking';
 
+    // Ensure Back button works in this mode
+    this.attachBackHandler();
+
     // Helper to check/allocate a free room ID for host
     const ensureHostRoom = async () => {
       const baseId = `stickfight_${this.room}`;
@@ -248,6 +313,8 @@ class Game {
         updatedAt: Date.now()
       });
       console.log(`Online room ${this.room} aangemaakt. Wachten op speler...`);
+      // Lock UI to only allow Back while hosting lobby
+      this.lockUIForHosting();
     } else {
       const roomId = `stickfight_${this.room}`;
       this.roomDocRef = this.db.collection('rooms').doc(roomId);
