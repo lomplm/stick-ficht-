@@ -39,6 +39,8 @@ class Game {
     this.ctx = null;
     this.lastPlayerActionDrawn = '';
     this.lastOpponentActionDrawn = '';
+    this.animationStartMs = 0;
+    this.animationDurationMs = 500;
     this.initRenderer();
   }
 
@@ -242,9 +244,7 @@ class Game {
       opponentHP: this.opponentHP
     };
     this.send(result);
-    this.lastPlayerActionDrawn = this.playerAction;
-    this.lastOpponentActionDrawn = this.opponentAction;
-    this.drawState();
+    this.startActionAnimation(this.playerAction, this.opponentAction);
     if(this.playerHP <= 0 || this.opponentHP <= 0) {
       this.state = 'gameover';
       this.showGameOver();
@@ -389,15 +389,20 @@ class Game {
           // reset local chosen actions
           this.playerAction = null;
           this.opponentAction = null;
-          this.lastPlayerActionDrawn = p1A;
-          this.lastOpponentActionDrawn = p2A;
-          this.drawState();
+          this.startActionAnimation(p1A, p2A);
         }
       } else {
         // Client clears its local chosen action once host resolved
         if(!p2A && this.playerAction) {
           this.playerAction = null;
         }
+        // If both actions are present (before host resolves), animate them for the client perspective
+        if (p1A && p2A) {
+          // client is player2
+          this.startActionAnimation(p2A, p1A);
+        }
+        // Always redraw on updates to keep HP labels in sync
+        this.drawState();
       }
     }
 
@@ -501,6 +506,27 @@ class Game {
     } catch (_) {}
   }
 
+  startActionAnimation(playerAction, opponentAction) {
+    this.lastPlayerActionDrawn = playerAction || '';
+    this.lastOpponentActionDrawn = opponentAction || '';
+    this.animationStartMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const step = () => {
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const elapsed = now - this.animationStartMs;
+      if (elapsed <= this.animationDurationMs) {
+        this.drawScene();
+        if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(step);
+      } else {
+        // End of animation: clear last actions and draw final state
+        this.lastPlayerActionDrawn = '';
+        this.lastOpponentActionDrawn = '';
+        this.animationStartMs = 0;
+        this.drawState();
+      }
+    };
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(step); else step();
+  }
+
   drawScene() {
     if (!this.ctx || !this.canvas) return;
     const ctx = this.ctx;
@@ -524,10 +550,25 @@ class Game {
     ctx.fillText(`${you} — ${this.playerHP} HP`, 40, 30);
     ctx.fillText(`${opp} — ${this.opponentHP} HP`, w - 220, 30);
 
-    // Stick figures positions
-    const leftX = 140; const rightX = w - 140; const baseY = h - 40;
-    this.drawStickFigure(leftX, baseY, 'right', this.lastPlayerActionDrawn || this.playerAction);
-    this.drawStickFigure(rightX, baseY, 'left', this.lastOpponentActionDrawn || this.opponentAction);
+    // Stick figures positions with simple animation offsets
+    const baseY = h - 40;
+    let leftX = 140; let rightX = w - 140;
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const elapsed = this.animationStartMs ? (now - this.animationStartMs) : 0;
+    const t = Math.min(1, Math.max(0, elapsed / this.animationDurationMs));
+    const ease = (p) => (1 - Math.cos(Math.PI * p)) / 2; // easeInOut
+    const e = ease(t);
+
+    // Attack: lunge forward; Run: step back
+    const pA = this.lastPlayerActionDrawn || this.playerAction;
+    const oA = this.lastOpponentActionDrawn || this.opponentAction;
+    if (pA === 'attack') leftX += 18 * e;
+    if (oA === 'attack') rightX -= 18 * e;
+    if (pA === 'run') leftX -= 12 * e;
+    if (oA === 'run') rightX += 12 * e;
+
+    this.drawStickFigure(leftX, baseY, 'right', pA);
+    this.drawStickFigure(rightX, baseY, 'left', oA);
   }
 
   drawStickFigure(x, baseY, facing, action) {
