@@ -15,12 +15,20 @@
   <body>
     <h2>Stick Fight (Demo)</h2>
     <div class="row">
-      <input id="room" placeholder="Room code (bv. room-1)" />
+      <input id="playerName" placeholder="Jouw naam" value="Speler" />
+      <input id="room" placeholder="Room code (bv. my-room)" />
       <button id="btnHost">Create Game</button>
       <button id="btnJoin">Join Game</button>
       <button id="btnHostOnline">Host Online</button>
       <button id="btnJoinOnline">Join Online</button>
       <button id="btnReset">Reset</button>
+    </div>
+    <div class="row">
+      <button id="btnRefreshRooms">Refresh Rooms</button>
+      <select id="roomsList" style="min-width:240px">
+        <option value="">(geen data)</option>
+      </select>
+      <button id="btnUseSelected">Gebruik selectie</button>
     </div>
     <div class="row">
       <button id="actAttack" disabled>Attack</button>
@@ -67,7 +75,9 @@
           logEl.scrollTop = logEl.scrollHeight;
         };
 
-        let game = new Game('Speler');
+        const nameInput = document.getElementById('playerName');
+        function currentName() { return nameInput.value || 'Speler'; }
+        let game = new Game(currentName());
 
         function updateState() {
           stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
@@ -75,12 +85,14 @@
 
         document.getElementById('btnHost').addEventListener('click', () => {
           const room = document.getElementById('room').value || 'room-1';
+          game = new Game(currentName());
           game.startNetwork(room, true);
           updateState();
         });
 
         document.getElementById('btnJoin').addEventListener('click', () => {
           const room = document.getElementById('room').value || 'room-1';
+          game = new Game(currentName());
           game.startNetwork(room, false);
           updateState();
         });
@@ -98,6 +110,7 @@
             console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
+          game = new Game(currentName());
           game.startOnline(window.__db, room, true);
           updateState();
         });
@@ -107,8 +120,52 @@
             console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
+          game = new Game(currentName());
           game.startOnline(window.__db, room, false);
           updateState();
+        });
+
+        // Rooms lijst ophalen en gebruiken
+        async function refreshRooms() {
+          if (!window.__db) {
+            console.log('Firebase niet geinitialiseerd. Vul config in.');
+            return;
+          }
+          const select = document.getElementById('roomsList');
+          select.innerHTML = '';
+          try {
+            const snap = await window.__db
+              .collection('rooms')
+              .where('state','==','matchmaking')
+              .orderBy('updatedAt','desc')
+              .limit(50)
+              .get();
+            if (snap.empty) {
+              const opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = '(geen open rooms)';
+              select.appendChild(opt);
+            } else {
+              snap.forEach(doc => {
+                const id = doc.id; // stickfight_<room>
+                const room = id.replace(/^stickfight_/,'');
+                const data = doc.data();
+                const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
+                const opt = document.createElement('option');
+                opt.value = room;
+                opt.textContent = label;
+                select.appendChild(opt);
+              });
+            }
+          } catch (e) {
+            console.log('Rooms laden faalde:', e && e.message ? e.message : e);
+          }
+        }
+        document.getElementById('btnRefreshRooms').addEventListener('click', refreshRooms);
+        document.getElementById('btnUseSelected').addEventListener('click', () => {
+          const sel = document.getElementById('roomsList');
+          const val = sel.value;
+          if (val) document.getElementById('room').value = val;
         });
 
         ['actAttack','actBlock','actItem','actRun'].forEach(id => {
