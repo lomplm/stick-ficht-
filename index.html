@@ -218,15 +218,16 @@
           });
         });
 
-        // Enable/disable action buttons based on state
-        const observer = new MutationObserver(() => {
+        // Enable/disable action buttons based on state (polling ensures client enables after host switches to playing)
+        function syncControls() {
           const enable = game.state === 'playing' && !game.playerAction;
           ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-            document.getElementById(id).disabled = !enable;
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enable;
           });
           stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
-        });
-        observer.observe(logEl, { childList: true, subtree: true, characterData: true });
+        }
+        setInterval(syncControls, 250);
 
         updateState();
       })();

@@ -32,6 +32,8 @@ class Game {
     this.roomDocRef = null;
     this.roomUnsub = null;
     this.isOnline = false;
+    // Combat tuning
+    this.attackHitChance = 0.8; // 80% kans dat een aanval raakt
   }
 
   // Show start menu
@@ -428,12 +430,26 @@ class Game {
 
   // Action resolution logic
   resolveActions() {
-    // Simple example logic
-    if(this.playerAction === 'attack' && this.opponentAction !== 'block') {
-      this.opponentHP -= 20;
+    // Simple example logic met miss-kans
+    const playerAttackEligible = this.playerAction === 'attack' && this.opponentAction !== 'block';
+    const opponentAttackEligible = this.opponentAction === 'attack' && this.playerAction !== 'block';
+
+    if (playerAttackEligible) {
+      const hit = Math.random() < this.attackHitChance;
+      if (hit) {
+        this.opponentHP -= 20;
+      } else {
+        console.log(`${this.playerName}'s attack mist!`);
+      }
     }
-    if(this.opponentAction === 'attack' && this.playerAction !== 'block') {
-      this.playerHP -= 20;
+
+    if (opponentAttackEligible) {
+      const hit = Math.random() < this.attackHitChance;
+      if (hit) {
+        this.playerHP -= 20;
+      } else {
+        console.log(`Opponent's attack mist!`);
+      }
     }
     if(this.playerAction === 'item') {
       this.playerHP += 10; // heal
