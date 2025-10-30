@@ -192,10 +192,44 @@ class Game {
     this.isOnline = true;
     this.state = 'matchmaking';
 
-    const roomId = `stickfight_${this.room}`;
-    this.roomDocRef = this.db.collection('rooms').doc(roomId);
+    // Helper to check/allocate a free room ID for host
+    const ensureHostRoom = async () => {
+      const baseId = `stickfight_${this.room}`;
+      let candidateId = baseId;
+      let tries = 0;
+      while (tries < 50) {
+        const ref = this.db.collection('rooms').doc(candidateId);
+        const snap = await ref.get();
+        if (!snap.exists) {
+          this.roomDocRef = ref;
+          return candidateId; // free
+        }
+        const data = snap.data() || {};
+        if (data.state === 'gameover') {
+          this.roomDocRef = ref;
+          return candidateId; // reuse finished room
+        }
+        // Taken and active -> try next suffix
+        tries += 1;
+        const suffix = tries + 1; // start from -2
+        candidateId = `${baseId}-${suffix}`;
+      }
+      // fallback random
+      const rand = Math.random().toString(36).slice(2, 7);
+      candidateId = `${baseId}-${rand}`;
+      this.roomDocRef = this.db.collection('rooms').doc(candidateId);
+      return candidateId;
+    };
 
     if(this.isHost) {
+      const allocatedDocId = await ensureHostRoom();
+      // Update visible room code if auto-changed
+      const allocatedRoom = allocatedDocId.replace(/^stickfight_/, '');
+      if (allocatedRoom !== this.room) {
+        console.log(`Gekozen room is bezet. Nieuwe room toegewezen: ${allocatedRoom}`);
+        this.room = allocatedRoom;
+      }
+
       await this.roomDocRef.set({
         state: 'matchmaking',
         hostName: this.playerName,
@@ -209,6 +243,8 @@ class Game {
       });
       console.log(`Online room ${this.room} aangemaakt. Wachten op speler...`);
     } else {
+      const roomId = `stickfight_${this.room}`;
+      this.roomDocRef = this.db.collection('rooms').doc(roomId);
       const snap = await this.roomDocRef.get();
       if(!snap.exists) {
         console.log('Room bestaat niet. Laat de host eerst aanmaken.');
