@@ -34,6 +34,12 @@ class Game {
     this.isOnline = false;
     // Combat tuning
     this.attackHitChance = 0.8; // 80% kans dat een aanval raakt
+    // Rendering
+    this.canvas = null;
+    this.ctx = null;
+    this.lastPlayerActionDrawn = '';
+    this.lastOpponentActionDrawn = '';
+    this.initRenderer();
   }
 
   // Show start menu
@@ -236,6 +242,8 @@ class Game {
       opponentHP: this.opponentHP
     };
     this.send(result);
+    this.lastPlayerActionDrawn = this.playerAction;
+    this.lastOpponentActionDrawn = this.opponentAction;
     this.drawState();
     if(this.playerHP <= 0 || this.opponentHP <= 0) {
       this.state = 'gameover';
@@ -381,6 +389,8 @@ class Game {
           // reset local chosen actions
           this.playerAction = null;
           this.opponentAction = null;
+          this.lastPlayerActionDrawn = p1A;
+          this.lastOpponentActionDrawn = p2A;
           this.drawState();
         }
       } else {
@@ -465,7 +475,7 @@ class Game {
 
   drawState() {
     console.log(`You: ${this.playerHP} HP vs Opponent: ${this.opponentHP} HP`);
-    // pseudo: Draw stick figures and HP bars
+    this.drawScene();
   }
 
   showGameOver() {
@@ -479,6 +489,90 @@ class Game {
       // pseudo: leaderboard logic here
     }
     // Option to play again
+  }
+
+  initRenderer() {
+    try {
+      if (typeof document === 'undefined') return;
+      this.canvas = document.getElementById('gameCanvas');
+      if (!this.canvas) return;
+      this.ctx = this.canvas.getContext('2d');
+      this.drawScene();
+    } catch (_) {}
+  }
+
+  drawScene() {
+    if (!this.ctx || !this.canvas) return;
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Ground
+    ctx.strokeStyle = '#c8d1e3';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, h - 40);
+    ctx.lineTo(w - 20, h - 40);
+    ctx.stroke();
+
+    // Names and HP
+    ctx.fillStyle = '#111';
+    ctx.font = '14px system-ui, Arial';
+    const you = this.playerName || 'You';
+    const opp = this.opponentName || 'Opponent';
+    ctx.fillText(`${you} — ${this.playerHP} HP`, 40, 30);
+    ctx.fillText(`${opp} — ${this.opponentHP} HP`, w - 220, 30);
+
+    // Stick figures positions
+    const leftX = 140; const rightX = w - 140; const baseY = h - 40;
+    this.drawStickFigure(leftX, baseY, 'right', this.lastPlayerActionDrawn || this.playerAction);
+    this.drawStickFigure(rightX, baseY, 'left', this.lastOpponentActionDrawn || this.opponentAction);
+  }
+
+  drawStickFigure(x, baseY, facing, action) {
+    const ctx = this.ctx; if (!ctx) return;
+    // body proportions
+    const headR = 16; const body = 40; const leg = 28; const arm = 22;
+    const yHead = baseY - (leg + body + headR*2);
+    const centerY = yHead + headR*2;
+    const dir = facing === 'right' ? 1 : -1;
+
+    // Head
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, yHead + headR, headR, 0, Math.PI * 2); ctx.stroke();
+    // Body
+    ctx.beginPath(); ctx.moveTo(x, centerY); ctx.lineTo(x, centerY + body); ctx.stroke();
+    // Arms
+    const armY = centerY + 8;
+    ctx.beginPath(); ctx.moveTo(x, armY); ctx.lineTo(x - arm, armY + 10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, armY); ctx.lineTo(x + arm, armY + 10); ctx.stroke();
+    // Legs
+    const legY = centerY + body;
+    ctx.beginPath(); ctx.moveTo(x, legY); ctx.lineTo(x - 12, legY + leg); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, legY); ctx.lineTo(x + 12, legY + leg); ctx.stroke();
+
+    // Action visuals
+    if (action === 'attack') {
+      ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + dir * (arm + 2), armY + 10);
+      ctx.lineTo(x + dir * (arm + 40), armY);
+      ctx.stroke();
+    } else if (action === 'block') {
+      ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x + dir * (arm + 8), armY + 10, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (action === 'item') {
+      ctx.fillStyle = '#16a34a';
+      ctx.fillRect(x - 6, yHead - 10, 12, 12);
+    } else if (action === 'run') {
+      ctx.fillStyle = '#9ca3af';
+      ctx.beginPath();
+      ctx.arc(x - dir * 18, legY + leg - 6, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
