@@ -141,12 +141,46 @@
           const select = document.getElementById('roomsList');
           select.innerHTML = '';
           try {
-            const snap = await window.__db
-              .collection('rooms')
-              .where('state','==','matchmaking')
-              .orderBy('updatedAt','desc')
-              .limit(50)
-              .get();
+            let snap;
+            try {
+              // Voorkeursquery met sortering (vereist composite index in Firestore)
+              snap = await window.__db
+                .collection('rooms')
+                .where('state','==','matchmaking')
+                .orderBy('updatedAt','desc')
+                .limit(50)
+                .get();
+            } catch (err) {
+              // Fallback zonder index: haal rauwe data op en sorteer client-side
+              console.log('Index ontbreekt; val terug op client-side sortering. Maak de index aan voor betere performance.');
+              snap = await window.__db
+                .collection('rooms')
+                .where('state','==','matchmaking')
+                .limit(50)
+                .get();
+              // Zet om naar array om te sorteren
+              const docs = snap.docs
+                .map(d => ({ id: d.id, data: d.data() }))
+                .sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+              // Render en return vroegtijdig
+              if (docs.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '(geen open rooms)';
+                select.appendChild(opt);
+              } else {
+                docs.forEach(({ id, data }) => {
+                  const room = id.replace(/^stickfight_/, '');
+                  const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
+                  const opt = document.createElement('option');
+                  opt.value = room;
+                  opt.textContent = label;
+                  select.appendChild(opt);
+                });
+              }
+              return;
+            }
+
             if (snap.empty) {
               const opt = document.createElement('option');
               opt.value = '';
@@ -155,7 +189,7 @@
             } else {
               snap.forEach(doc => {
                 const id = doc.id; // stickfight_<room>
-                const room = id.replace(/^stickfight_/,'');
+                const room = id.replace(/^stickfight_/, '');
                 const data = doc.data();
                 const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
                 const opt = document.createElement('option');
