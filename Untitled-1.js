@@ -41,6 +41,7 @@ class Game {
     this.lastOpponentActionDrawn = '';
     this.animationStartMs = 0;
     this.animationDurationMs = 500;
+    this.lastResolvedAtSeen = 0;
     this.initRenderer();
   }
 
@@ -379,7 +380,10 @@ class Game {
             p1Action: '',
             p2Action: '',
             turn: (data.turn || 1) + 1,
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            lastP1Action: p1A,
+            lastP2Action: p2A,
+            lastResolvedAt: Date.now()
           };
           // game over check
           if(this.playerHP <= 0 || this.opponentHP <= 0) {
@@ -396,12 +400,16 @@ class Game {
         if(!p2A && this.playerAction) {
           this.playerAction = null;
         }
-        // If both actions are present (before host resolves), animate them for the client perspective
-        if (p1A && p2A) {
-          // client is player2
-          this.startActionAnimation(p2A, p1A);
+        // Trigger animation when host reports a resolved turn
+        const lrAt = data.lastResolvedAt || 0;
+        if (lrAt && lrAt !== this.lastResolvedAtSeen) {
+          this.lastResolvedAtSeen = lrAt;
+          const lp1 = data.lastP1Action || '';
+          const lp2 = data.lastP2Action || '';
+          // client perspective: our action first param
+          this.startActionAnimation(lp2, lp1);
         }
-        // Always redraw on updates to keep HP labels in sync
+        // Always redraw to keep HP labels in sync
         this.drawState();
       }
     }
