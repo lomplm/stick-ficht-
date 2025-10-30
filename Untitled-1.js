@@ -313,8 +313,6 @@ class Game {
         updatedAt: Date.now()
       });
       console.log(`Online room ${this.room} aangemaakt. Wachten op speler...`);
-      // Lock UI to only allow Back while hosting lobby
-      this.lockUIForHosting();
     } else {
       const roomId = `stickfight_${this.room}`;
       this.roomDocRef = this.db.collection('rooms').doc(roomId);

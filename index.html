@@ -17,10 +17,9 @@
     <div class="row">
       <input id="playerName" placeholder="Jouw naam" value="Speler" />
       <input id="room" placeholder="Room code (bv. my-room)" />
-      <button id="btnHost">Create Game</button>
-      <button id="btnJoin">Join Game</button>
       <button id="btnHostOnline">Host Online</button>
       <button id="btnJoinOnline">Join Online</button>
+      <button id="btnBack" disabled>Back</button>
       <button id="btnReset">Reset</button>
     </div>
     <div class="row">
@@ -83,19 +82,7 @@
           stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
         }
 
-        document.getElementById('btnHost').addEventListener('click', () => {
-          const room = document.getElementById('room').value || 'room-1';
-          game = new Game(currentName());
-          game.startNetwork(room, true);
-          updateState();
-        });
-
-        document.getElementById('btnJoin').addEventListener('click', () => {
-          const room = document.getElementById('room').value || 'room-1';
-          game = new Game(currentName());
-          game.startNetwork(room, false);
-          updateState();
-        });
+        // Local Create/Join removed
 
         document.getElementById('btnReset').addEventListener('click', () => {
           game = new Game('Speler');
@@ -104,7 +91,11 @@
         });
 
         // Online hosting/joinen via Firestore
-        document.getElementById('btnHostOnline').addEventListener('click', () => {
+        const btnHostOnline = document.getElementById('btnHostOnline');
+        const btnJoinOnline = document.getElementById('btnJoinOnline');
+        const btnBack = document.getElementById('btnBack');
+
+        btnHostOnline.addEventListener('click', () => {
           const room = document.getElementById('room').value || 'room-1';
           if (!window.__db) {
             console.log('Vul eerst je Firebase config in (index.html).');
@@ -113,8 +104,11 @@
           game = new Game(currentName());
           game.startOnline(window.__db, room, true);
           updateState();
+          // Disable opposite option until Back
+          btnJoinOnline.disabled = true;
+          btnBack.disabled = false;
         });
-        document.getElementById('btnJoinOnline').addEventListener('click', () => {
+        btnJoinOnline.addEventListener('click', () => {
           const room = document.getElementById('room').value || 'room-1';
           if (!window.__db) {
             console.log('Vul eerst je Firebase config in (index.html).');
@@ -123,6 +117,19 @@
           game = new Game(currentName());
           game.startOnline(window.__db, room, false);
           updateState();
+          // Disable opposite option until Back
+          btnHostOnline.disabled = true;
+          btnBack.disabled = false;
+        });
+
+        // Back button: leave lobby/match and re-enable options
+        btnBack.addEventListener('click', async () => {
+          if (game && typeof game.onBack === 'function') {
+            await game.onBack();
+          }
+          btnHostOnline.disabled = false;
+          btnJoinOnline.disabled = false;
+          btnBack.disabled = true;
         });
 
         // Rooms lijst ophalen en gebruiken
