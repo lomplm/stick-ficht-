@@ -220,7 +220,8 @@
 
         // Enable/disable action buttons based on state (polling ensures client enables after host switches to playing)
         function syncControls() {
-          const enable = game.state === 'playing' && !game.playerAction;
+          const clientMayAct = game.isOnline && !game.isHost && (game.state === 'playing' || game.state === 'matchmaking');
+          const enable = (!game.isOnline && game.state === 'playing' && !game.playerAction) || (game.isOnline && (game.isHost ? (game.state === 'playing' && !game.playerAction) : (clientMayAct && !game.playerAction)));
           ['actAttack','actBlock','actItem','actRun'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = !enable;

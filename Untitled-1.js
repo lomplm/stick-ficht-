@@ -404,7 +404,8 @@ class Game {
     const snap = await this.roomDocRef.get();
     if(!snap.exists) return;
     const data = snap.data();
-    if(data.state !== 'playing') return;
+    // Sta client toe om alvast te kiezen in matchmaking; host lost op zodra beide acties en state door host naar 'playing' gaat
+    if(data.state !== 'playing' && !(data.state === 'matchmaking' && !this.isHost)) return;
     if(data[field]) return; // already chosen this turn
     await this.roomDocRef.update({ [field]: action, updatedAt: Date.now() });
     console.log(`${this.playerName} chooses ${action}`);
