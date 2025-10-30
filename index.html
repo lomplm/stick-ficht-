@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stick Fight Demo</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+      .row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+      button { padding: 10px 14px; font-size: 14px; cursor: pointer; }
+      #log { background: #0b1020; color: #e5ecff; padding: 12px; border-radius: 8px; min-height: 160px; white-space: pre-wrap; }
+      .hp { font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <h2>Stick Fight (Demo)</h2>
+    <div class="row">
+      <input id="room" placeholder="Room code (bv. room-1)" />
+      <button id="btnHost">Create Game</button>
+      <button id="btnJoin">Join Game</button>
+      <button id="btnHostOnline">Host Online</button>
+      <button id="btnJoinOnline">Join Online</button>
+      <button id="btnReset">Reset</button>
+    </div>
+    <div class="row">
+      <button id="actAttack" disabled>Attack</button>
+      <button id="actBlock" disabled>Block</button>
+      <button id="actItem" disabled>Item</button>
+      <button id="actRun" disabled>Run</button>
+    </div>
+    <div id="state" class="hp"></div>
+    <div id="log" aria-live="polite"></div>
+
+    <script src="Untitled-1.js"></script>
+    <!-- Firebase compat SDKs (global firebase.*) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+      // 1) Vul je Firebase config hieronder in (Project settings -> Your apps -> SDK setup and configuration)
+      // Voorbeeld:
+      // const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
+      const firebaseConfig = {
+        apiKey: "AIzaSyAs07dGS6aFqshNei3n2edxnaBLrSsfRvA",
+        authDomain: "stick-ficht.firebaseapp.com",
+        projectId: "stick-ficht",
+        storageBucket: "stick-ficht.firebasestorage.app",
+        messagingSenderId: "198218024025",
+        appId: "1:198218024025:web:b1ade6fd2ab57f6a42dd48",
+        measurementId: "G-JCY8JXHB1W"
+      };
+      let db = null;
+      if (firebaseConfig) {
+        const app = firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore(app);
+        window.__db = db; // maak beschikbaar voor game code
+      }
+    </script>
+    <script>
+      (function() {
+        const logEl = document.getElementById('log');
+        const stateEl = document.getElementById('state');
+        const originalLog = console.log.bind(console);
+        console.log = function(...args) {
+          originalLog(...args);
+          const line = args.map(String).join(' ');
+          logEl.textContent += (logEl.textContent ? '\n' : '') + line;
+          logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        let game = new Game('Speler');
+
+        function updateState() {
+          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+        }
+
+        document.getElementById('btnHost').addEventListener('click', () => {
+          const room = document.getElementById('room').value || 'room-1';
+          game.startNetwork(room, true);
+          updateState();
+        });
+
+        document.getElementById('btnJoin').addEventListener('click', () => {
+          const room = document.getElementById('room').value || 'room-1';
+          game.startNetwork(room, false);
+          updateState();
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+          game = new Game('Speler');
+          logEl.textContent = '';
+          updateState();
+        });
+
+        // Online hosting/joinen via Firestore
+        document.getElementById('btnHostOnline').addEventListener('click', () => {
+          const room = document.getElementById('room').value || 'room-1';
+          if (!window.__db) {
+            console.log('Vul eerst je Firebase config in (index.html).');
+            return;
+          }
+          game.startOnline(window.__db, room, true);
+          updateState();
+        });
+        document.getElementById('btnJoinOnline').addEventListener('click', () => {
+          const room = document.getElementById('room').value || 'room-1';
+          if (!window.__db) {
+            console.log('Vul eerst je Firebase config in (index.html).');
+            return;
+          }
+          game.startOnline(window.__db, room, false);
+          updateState();
+        });
+
+        ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+          document.getElementById(id).addEventListener('click', () => {
+            const map = { actAttack: 'attack', actBlock: 'block', actItem: 'item', actRun: 'run' };
+            const action = map[id];
+            game.submitAction(action);
+            updateState();
+          });
+        });
+
+        // Enable/disable action buttons based on state
+        const observer = new MutationObserver(() => {
+          const enable = game.state === 'playing' && !game.playerAction;
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            document.getElementById(id).disabled = !enable;
+          });
+          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+        });
+        observer.observe(logEl, { childList: true, subtree: true, characterData: true });
+
+        updateState();
+      })();
+    </script>
+  </body>
+  </html>
+
