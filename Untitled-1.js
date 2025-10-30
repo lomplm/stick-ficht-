@@ -42,6 +42,9 @@ class Game {
     this.animationStartMs = 0;
     this.animationDurationMs = 500;
     this.lastResolvedAtSeen = 0;
+    // Logging helpers to tonen alleen delta's
+    this.lastLoggedPlayerHP = this.playerHP;
+    this.lastLoggedOpponentHP = this.opponentHP;
     this.initRenderer();
   }
 
@@ -238,7 +241,18 @@ class Game {
     if(!this.isHost) return;
     if(!this.playerAction || !this.opponentAction) return;
     // Host authoritative resolution
+    const beforeP = this.playerHP;
+    const beforeO = this.opponentHP;
     this.resolveActions();
+    // Log alleen delta's voor host
+    const dSelf = this.playerHP - beforeP;
+    const dOpp = this.opponentHP - beforeO;
+    if (dOpp < 0) console.log(`${this.opponentName || 'Opponent'} verliest ${-dOpp} HP`);
+    if (dOpp > 0) console.log(`${this.opponentName || 'Opponent'} krijgt +${dOpp} HP`);
+    if (dSelf < 0) console.log(`Jij verliest ${-dSelf} HP`);
+    if (dSelf > 0) console.log(`Jij krijgt +${dSelf} HP`);
+    this.lastLoggedPlayerHP = this.playerHP;
+    this.lastLoggedOpponentHP = this.opponentHP;
     const result = {
       type: 'turn_result',
       playerHP: this.playerHP,
@@ -357,8 +371,21 @@ class Game {
       // mirror host-driven state
       this.state = data.state;
       this.opponentName = data.hostName || 'Host';
+      const prevP = this.playerHP;
+      const prevO = this.opponentHP;
       this.playerHP = data.player2HP;
       this.opponentHP = data.player1HP;
+      // Indien state al playing is en HP's gewijzigd, log deltas éénmalig bij verandering
+      if (this.playerHP !== prevP || this.opponentHP !== prevO) {
+        const dSelf = this.playerHP - (this.lastLoggedPlayerHP ?? prevP);
+        const dOpp = this.opponentHP - (this.lastLoggedOpponentHP ?? prevO);
+        if (dOpp < 0) console.log(`${this.opponentName || 'Opponent'} verliest ${-dOpp} HP`);
+        if (dOpp > 0) console.log(`${this.opponentName || 'Opponent'} krijgt +${dOpp} HP`);
+        if (dSelf < 0) console.log(`Jij verliest ${-dSelf} HP`);
+        if (dSelf > 0) console.log(`Jij krijgt +${dSelf} HP`);
+        this.lastLoggedPlayerHP = this.playerHP;
+        this.lastLoggedOpponentHP = this.opponentHP;
+      }
     }
 
     // When playing, check for resolution
@@ -487,7 +514,6 @@ class Game {
   }
 
   drawState() {
-    console.log(`You: ${this.playerHP} HP vs Opponent: ${this.opponentHP} HP`);
     this.drawScene();
   }
 
