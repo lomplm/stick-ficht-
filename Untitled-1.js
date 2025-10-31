@@ -40,8 +40,11 @@ class Game {
     this.lastPlayerActionDrawn = '';
     this.lastOpponentActionDrawn = '';
     this.animationStartMs = 0;
-    this.animationDurationMs = 500;
+    this.animationDurationMs = 800;
     this.lastResolvedAtSeen = 0;
+    this.animationFrameId = null;
+    this.particles = [];
+    this.damageNumbers = [];
     // Logging helpers to tonen alleen delta's
     this.lastLoggedPlayerHP = this.playerHP;
     this.lastLoggedOpponentHP = this.opponentHP;
@@ -259,7 +262,7 @@ class Game {
       opponentHP: this.opponentHP
     };
     this.send(result);
-    this.startActionAnimation(this.playerAction, this.opponentAction);
+    this.startActionAnimation(this.playerAction, this.opponentAction, beforeP, beforeO);
     if(this.playerHP <= 0 || this.opponentHP <= 0) {
       this.state = 'gameover';
       this.showGameOver();
@@ -373,6 +376,9 @@ class Game {
       this.opponentName = data.hostName || 'Host';
       const prevP = this.playerHP;
       const prevO = this.opponentHP;
+      // Store HP before update for damage tracking
+      this._prevPlayerHP = prevP;
+      this._prevOpponentHP = prevO;
       this.playerHP = data.player2HP;
       this.opponentHP = data.player1HP;
       // Indien state al playing is en HP's gewijzigd, log deltas éénmalig bij verandering
@@ -418,9 +424,11 @@ class Game {
           }
           await this.roomDocRef.update(next);
           // reset local chosen actions
+          const beforeHP1 = data.player1HP;
+          const beforeHP2 = data.player2HP;
           this.playerAction = null;
           this.opponentAction = null;
-          this.startActionAnimation(p1A, p2A);
+          this.startActionAnimation(p1A, p2A, beforeHP1, beforeHP2);
         }
       } else {
         // Client clears its local chosen action once host resolved
@@ -433,8 +441,14 @@ class Game {
           this.lastResolvedAtSeen = lrAt;
           const lp1 = data.lastP1Action || '';
           const lp2 = data.lastP2Action || '';
+          // Use stored HP values before update for damage numbers
+          const beforeP2 = this._prevPlayerHP !== undefined ? this._prevPlayerHP : this.playerHP;
+          const beforeP1 = this._prevOpponentHP !== undefined ? this._prevOpponentHP : this.opponentHP;
           // client perspective: our action first param
-          this.startActionAnimation(lp2, lp1);
+          this.startActionAnimation(lp2, lp1, beforeP2, beforeP1);
+          // Clear stored values after use
+          this._prevPlayerHP = undefined;
+          this._prevOpponentHP = undefined;
         }
         // Always redraw to keep HP labels in sync
         this.drawState();
@@ -582,25 +596,113 @@ class Game {
     } catch (_) {}
   }
 
-  startActionAnimation(playerAction, opponentAction) {
+  startActionAnimation(playerAction, opponentAction, prevPlayerHP = null, prevOpponentHP = null) {
+    // Cancel any existing animation
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+    
     this.lastPlayerActionDrawn = playerAction || '';
     this.lastOpponentActionDrawn = opponentAction || '';
     this.animationStartMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    
+    // Add particles for attacks
+    if (playerAction === 'attack') {
+      this.addParticles(140, 250, '#ef4444');
+    }
+    if (opponentAction === 'attack') {
+      this.addParticles(560, 250, '#ef4444');
+    }
+    
+    // Use provided HP values or fall back to current HP (for cases where damage wasn't tracked)
+    const beforePlayerHP = prevPlayerHP !== null ? prevPlayerHP : this.playerHP;
+    const beforeOpponentHP = prevOpponentHP !== null ? prevOpponentHP : this.opponentHP;
+    
     const step = () => {
       const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       const elapsed = now - this.animationStartMs;
-      if (elapsed <= this.animationDurationMs) {
+      const progress = Math.min(1, elapsed / this.animationDurationMs);
+      
+      if (progress < 1) {
+        // Update particles and damage numbers
+        this.updateParticles();
+        this.updateDamageNumbers();
+        
         this.drawScene();
-        if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(step);
+        this.animationFrameId = requestAnimationFrame(step);
       } else {
         // End of animation: clear last actions and draw final state
         this.lastPlayerActionDrawn = '';
         this.lastOpponentActionDrawn = '';
         this.animationStartMs = 0;
+        this.particles = [];
+        this.damageNumbers = [];
+        this.animationFrameId = null;
         this.drawState();
       }
     };
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(step); else step();
+    
+    // Show damage numbers after resolution
+    const playerDamage = beforePlayerHP - this.playerHP;
+    const opponentDamage = beforeOpponentHP - this.opponentHP;
+    
+    if (playerDamage > 0) {
+      this.addDamageNumber(140, 180, playerDamage, true);
+    }
+    if (opponentDamage > 0) {
+      this.addDamageNumber(560, 180, opponentDamage, false);
+    }
+    
+    if (typeof requestAnimationFrame !== 'undefined') {
+      this.animationFrameId = requestAnimationFrame(step);
+    } else {
+      step();
+    }
+  }
+  
+  addParticles(x, y, color) {
+    for (let i = 0; i < 8; i++) {
+      this.particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4,
+        life: 1,
+        decay: 0.02,
+        color: color,
+        size: Math.random() * 4 + 2
+      });
+    }
+  }
+  
+  updateParticles() {
+    this.particles = this.particles.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+      p.vy += 0.2; // gravity
+      return p.life > 0;
+    });
+  }
+  
+  addDamageNumber(x, y, damage, isPlayer) {
+    this.damageNumbers.push({
+      x: x,
+      y: y,
+      value: damage,
+      life: 1,
+      decay: 0.015,
+      isPlayer: isPlayer,
+      offsetY: 0
+    });
+  }
+  
+  updateDamageNumbers() {
+    this.damageNumbers = this.damageNumbers.filter(d => {
+      d.life -= d.decay;
+      d.offsetY -= 2;
+      return d.life > 0;
+    });
   }
 
   drawScene() {
@@ -610,86 +712,272 @@ class Game {
     const h = this.canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Ground
-    ctx.strokeStyle = '#c8d1e3';
+    // Sky gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, '#e0e7ff');
+    gradient.addColorStop(1, '#f7f9fc');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Ground with shadow
+    ctx.fillStyle = '#d1d5db';
+    ctx.fillRect(0, h - 40, w, 40);
+    ctx.strokeStyle = '#9ca3af';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(20, h - 40);
     ctx.lineTo(w - 20, h - 40);
     ctx.stroke();
 
-    // Names and HP
-    ctx.fillStyle = '#111';
-    ctx.font = '14px system-ui, Arial';
+    // HP bars background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(40, 45, 180, 20);
+    ctx.fillRect(w - 220, 45, 180, 20);
+
+    // HP bars
+    const playerHPPercent = Math.max(0, this.playerHP / 100);
+    const opponentHPPercent = Math.max(0, this.opponentHP / 100);
+    
+    ctx.fillStyle = playerHPPercent > 0.5 ? '#10b981' : playerHPPercent > 0.25 ? '#f59e0b' : '#ef4444';
+    ctx.fillRect(42, 47, 176 * playerHPPercent, 16);
+    
+    ctx.fillStyle = opponentHPPercent > 0.5 ? '#10b981' : opponentHPPercent > 0.25 ? '#f59e0b' : '#ef4444';
+    ctx.fillRect(w - 218, 47, 176 * opponentHPPercent, 16);
+
+    // HP bar borders
+    ctx.strokeStyle = '#4b5563';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(40, 45, 180, 20);
+    ctx.strokeRect(w - 220, 45, 180, 20);
+
+    // Names and HP text
+    ctx.fillStyle = '#1f2937';
+    ctx.font = 'bold 14px system-ui, Arial';
     const you = this.playerName || 'You';
     const opp = this.opponentName || 'Opponent';
-    ctx.fillText(`${you} — ${this.playerHP} HP`, 40, 30);
-    ctx.fillText(`${opp} — ${this.opponentHP} HP`, w - 220, 30);
+    ctx.fillText(`${you}`, 40, 28);
+    ctx.fillText(`${opp}`, w - 220, 28);
+    ctx.font = '12px system-ui, Arial';
+    ctx.fillText(`${this.playerHP} HP`, 42, 78);
+    ctx.fillText(`${this.opponentHP} HP`, w - 218, 78);
 
-    // Stick figures positions with simple animation offsets
+    // Stick figures positions with smooth animation
     const baseY = h - 40;
     let leftX = 140; let rightX = w - 140;
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const elapsed = this.animationStartMs ? (now - this.animationStartMs) : 0;
     const t = Math.min(1, Math.max(0, elapsed / this.animationDurationMs));
-    const ease = (p) => (1 - Math.cos(Math.PI * p)) / 2; // easeInOut
+    
+    // Improved easing function (ease-out-cubic)
+    const ease = (p) => 1 - Math.pow(1 - p, 3);
     const e = ease(t);
+    
+    // Bounce effect for attacks
+    const bounce = (p) => {
+      if (p < 0.5) return 4 * p * p;
+      return 1 - Math.pow(-2 * p + 2, 2) / 2;
+    };
+    const b = bounce(t);
 
-    // Attack: lunge forward; Run: step back
+    // Attack: lunge forward with bounce; Run: step back
     const pA = this.lastPlayerActionDrawn || this.playerAction;
     const oA = this.lastOpponentActionDrawn || this.opponentAction;
-    if (pA === 'attack') leftX += 18 * e;
-    if (oA === 'attack') rightX -= 18 * e;
-    if (pA === 'run') leftX -= 12 * e;
-    if (oA === 'run') rightX += 12 * e;
+    if (pA === 'attack') leftX += 25 * e - 8 * (1 - b);
+    if (oA === 'attack') rightX -= 25 * e + 8 * (1 - b);
+    if (pA === 'run') leftX -= 15 * e;
+    if (oA === 'run') rightX += 15 * e;
 
-    this.drawStickFigure(leftX, baseY, 'right', pA);
-    this.drawStickFigure(rightX, baseY, 'left', oA);
+    this.drawStickFigure(leftX, baseY, 'right', pA, e);
+    this.drawStickFigure(rightX, baseY, 'left', oA, e);
+    
+    // Draw particles
+    this.drawParticles();
+    
+    // Draw damage numbers
+    this.drawDamageNumbers();
+  }
+  
+  drawParticles() {
+    if (!this.ctx || this.particles.length === 0) return;
+    const ctx = this.ctx;
+    this.particles.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+  
+  drawDamageNumbers() {
+    if (!this.ctx || this.damageNumbers.length === 0) return;
+    const ctx = this.ctx;
+    this.damageNumbers.forEach(d => {
+      ctx.save();
+      ctx.globalAlpha = d.life;
+      ctx.fillStyle = d.isPlayer ? '#ef4444' : '#3b82f6';
+      ctx.font = `bold ${16 + (1 - d.life) * 8}px system-ui, Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`-${d.value}`, d.x, d.y + d.offsetY);
+      ctx.restore();
+    });
   }
 
-  drawStickFigure(x, baseY, facing, action) {
+  drawStickFigure(x, baseY, facing, action, animProgress = 0) {
     const ctx = this.ctx; if (!ctx) return;
+    ctx.save();
+    
     // body proportions
-    const headR = 16; const body = 40; const leg = 28; const arm = 22;
+    const headR = 18; const body = 45; const leg = 32; const arm = 26;
     const yHead = baseY - (leg + body + headR*2);
     const centerY = yHead + headR*2;
     const dir = facing === 'right' ? 1 : -1;
 
-    // Head
-    ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, yHead + headR, headR, 0, Math.PI * 2); ctx.stroke();
-    // Body
-    ctx.beginPath(); ctx.moveTo(x, centerY); ctx.lineTo(x, centerY + body); ctx.stroke();
-    // Arms
-    const armY = centerY + 8;
-    ctx.beginPath(); ctx.moveTo(x, armY); ctx.lineTo(x - arm, armY + 10); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, armY); ctx.lineTo(x + arm, armY + 10); ctx.stroke();
-    // Legs
-    const legY = centerY + body;
-    ctx.beginPath(); ctx.moveTo(x, legY); ctx.lineTo(x - 12, legY + leg); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, legY); ctx.lineTo(x + 12, legY + leg); ctx.stroke();
-
-    // Action visuals
+    // Calculate animation offsets for limbs
+    let armOffset = 0;
+    let legSpread = 12;
+    let bodyLean = 0;
+    
     if (action === 'attack') {
-      ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x + dir * (arm + 2), armY + 10);
-      ctx.lineTo(x + dir * (arm + 40), armY);
-      ctx.stroke();
+      armOffset = dir * 25 * animProgress;
+      bodyLean = dir * 3 * animProgress;
     } else if (action === 'block') {
-      ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 3;
+      armOffset = dir * -15 * animProgress;
+    } else if (action === 'run') {
+      legSpread = 12 + 8 * Math.sin(animProgress * Math.PI * 4);
+      bodyLean = dir * 2 * animProgress;
+    }
+
+    // Head with face
+    ctx.strokeStyle = '#1f2937'; 
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); 
+    ctx.arc(x + bodyLean, yHead + headR, headR, 0, Math.PI * 2); 
+    ctx.stroke();
+    
+    // Face expression
+    ctx.fillStyle = '#1f2937';
+    ctx.beginPath();
+    ctx.arc(x + bodyLean - 4, yHead + headR - 2, 2, 0, Math.PI * 2);
+    ctx.arc(x + bodyLean + 4, yHead + headR - 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (action === 'attack') {
+      // Angry expression
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(x + dir * (arm + 8), armY + 10, 10, 0, Math.PI * 2);
+      ctx.moveTo(x + bodyLean - 6, yHead + headR + 4);
+      ctx.lineTo(x + bodyLean, yHead + headR + 6);
+      ctx.lineTo(x + bodyLean + 6, yHead + headR + 4);
+      ctx.stroke();
+    }
+    
+    // Body with lean
+    ctx.strokeStyle = '#1f2937'; 
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); 
+    ctx.moveTo(x + bodyLean, centerY); 
+    ctx.lineTo(x + bodyLean, centerY + body); 
+    ctx.stroke();
+    
+    // Arms with animation
+    const armY = centerY + 10;
+    ctx.beginPath(); 
+    ctx.moveTo(x + bodyLean, armY); 
+    ctx.lineTo(x + bodyLean - (arm - armOffset) * (dir === 1 ? -1 : 1), armY + 12); 
+    ctx.stroke();
+    
+    ctx.beginPath(); 
+    ctx.moveTo(x + bodyLean, armY); 
+    ctx.lineTo(x + bodyLean + (arm + armOffset) * (dir === 1 ? 1 : -1), armY + 12); 
+    ctx.stroke();
+    
+    // Legs with animation
+    const legY = centerY + body;
+    ctx.beginPath(); 
+    ctx.moveTo(x + bodyLean, legY); 
+    ctx.lineTo(x + bodyLean - legSpread, legY + leg); 
+    ctx.stroke();
+    
+    ctx.beginPath(); 
+    ctx.moveTo(x + bodyLean, legY); 
+    ctx.lineTo(x + bodyLean + legSpread, legY + leg); 
+    ctx.stroke();
+
+    // Action visuals with better effects
+    if (action === 'attack') {
+      // Attack slash with glow
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#ef4444';
+      ctx.strokeStyle = '#ef4444'; 
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      const attackX = x + bodyLean + dir * (arm + 2 + armOffset);
+      const attackY = armY + 12;
+      ctx.moveTo(attackX, attackY);
+      ctx.lineTo(attackX + dir * 45, attackY - 15);
+      ctx.lineTo(attackX + dir * 50, attackY - 20);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      
+      // Multiple slashes for effect
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(attackX, attackY);
+      ctx.lineTo(attackX + dir * 40, attackY - 12);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (action === 'block') {
+      // Shield effect
+      ctx.strokeStyle = '#2563eb'; 
+      ctx.lineWidth = 4;
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.2)';
+      ctx.beginPath();
+      const shieldX = x + bodyLean + dir * (arm + 10);
+      ctx.arc(shieldX, armY + 12, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Shield highlight
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(shieldX - dir * 3, armY + 9, 8, 0, Math.PI * 2);
       ctx.stroke();
     } else if (action === 'item') {
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(x - 6, yHead - 10, 12, 12);
-    } else if (action === 'run') {
-      ctx.fillStyle = '#9ca3af';
+      // Healing glow
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#10b981';
+      ctx.fillStyle = '#10b981';
       ctx.beginPath();
-      ctx.arc(x - dir * 18, legY + leg - 6, 6, 0, Math.PI * 2);
+      ctx.arc(x + bodyLean, yHead - 8, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      
+      // Plus sign
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + bodyLean, yHead - 13);
+      ctx.lineTo(x + bodyLean, yHead - 3);
+      ctx.moveTo(x + bodyLean - 5, yHead - 8);
+      ctx.lineTo(x + bodyLean + 5, yHead - 8);
+      ctx.stroke();
+    } else if (action === 'run') {
+      // Dust clouds
+      ctx.fillStyle = 'rgba(156, 163, 175, 0.6)';
+      ctx.beginPath();
+      ctx.arc(x + bodyLean - dir * 25, legY + leg - 5, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + bodyLean - dir * 20, legY + leg - 2, 6, 0, Math.PI * 2);
       ctx.fill();
     }
+    
+    ctx.restore();
   }
 }
 
