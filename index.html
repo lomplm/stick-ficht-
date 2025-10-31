@@ -392,11 +392,25 @@
         let lastSyncTime = 0;
         function syncControls() {
           const now = performance.now();
-          if (now - lastSyncTime < 100) return; // Throttle to ~10fps for UI updates
+          if (now - lastSyncTime < 100) {
+            requestAnimationFrame(syncControls);
+            return; // Throttle to ~10fps for UI updates
+          }
           lastSyncTime = now;
           
-          const clientMayAct = game.isOnline && !game.isHost && (game.state === 'playing' || game.state === 'matchmaking');
-          const enable = (!game.isOnline && game.state === 'playing' && !game.playerAction) || (game.isOnline && (game.isHost ? (game.state === 'playing' && !game.playerAction) : (clientMayAct && !game.playerAction)));
+          // Enable buttons when playing and no action chosen yet
+          let enable = false;
+          if (!game.isOnline) {
+            // Local play: enable when playing and no action
+            enable = game.state === 'playing' && !game.playerAction;
+          } else {
+            // Online play
+            if (game.state === 'playing') {
+              // Both players can act when state is playing and they haven't chosen yet
+              enable = !game.playerAction;
+            }
+          }
+          
           ['actAttack','actBlock','actItem','actRun'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = !enable;

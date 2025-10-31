@@ -364,14 +364,18 @@ class Game {
       await this.roomDocRef.update({ state: 'playing', updatedAt: Date.now() });
       this.state = 'playing';
       this.opponentName = data.clientName;
-      this.playerHP = data.player1HP;
-      this.opponentHP = data.player2HP;
+      this.playerHP = data.player1HP || 100;
+      this.opponentHP = data.player2HP || 100;
+      this.playerAction = null;
+      this.opponentAction = null;
       console.log(`${this.opponentName} joined!`);
+      this.drawState();
       return;
     }
 
     if(!this.isHost) {
       // mirror host-driven state
+      const prevState = this.state;
       this.state = data.state;
       this.opponentName = data.hostName || 'Host';
       const prevP = this.playerHP;
@@ -379,8 +383,15 @@ class Game {
       // Store HP before update for damage tracking
       this._prevPlayerHP = prevP;
       this._prevOpponentHP = prevO;
-      this.playerHP = data.player2HP;
-      this.opponentHP = data.player1HP;
+      this.playerHP = data.player2HP || 100;
+      this.opponentHP = data.player1HP || 100;
+      
+      // If state just changed to playing, initialize actions and draw
+      if (this.state === 'playing' && prevState !== 'playing') {
+        this.playerAction = null;
+        this.opponentAction = null;
+        this.drawState();
+      }
       // Indien state al playing is en HP's gewijzigd, log deltas éénmalig bij verandering
       if (this.playerHP !== prevP || this.opponentHP !== prevO) {
         const dSelf = this.playerHP - (this.lastLoggedPlayerHP ?? prevP);
