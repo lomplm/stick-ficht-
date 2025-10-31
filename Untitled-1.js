@@ -53,16 +53,21 @@ class Game {
     this.turn = 1;
     // cooldowns for local client perspective (actionName -> remaining turns)
     this.myCooldowns = {};
-    // attack/item configs
+    // local optimistic buffs (for immediate UI feedback)
+    this.myBuffs = {};
+    // server-visible buffs for player/opponent (host keeps authoritative maps here)
+    this.playerBuffs = {};
+    this.opponentBuffs = {};
+    // attack/item configs (tweak values as desired)
     this.attacksConfig = {
-      light: { damage: 15, hit: 0.9 },
-      heavy: { damage: 30, hit: 0.6, cooldown: 2 },
+      light: { damage: 12, hit: 0.92 },
+      heavy: { damage: 28, hit: 0.65, cooldown: 2 },
       special: { damage: 40, hit: 0.45, cooldown: 5 }
     };
     this.itemsConfig = {
-      heal_small: { heal: 15, cooldown: 3 },
-      heal_big: { heal: 30, cooldown: 6 },
-      shield: { effect: 'block', cooldown: 4 } // acts like a block for that turn
+      heal_small: { heal: 18, cooldown: 3 },
+      speed_boost: { speed: 0.15, duration: 2, cooldown: 4 }, // raises hit chance
+      defense_buff: { defense: 0.5, duration: 2, cooldown: 4 } // reduces incoming damage by 50%
     };
   }
 
@@ -401,8 +406,10 @@ class Game {
         player2HP: 100,
         p1Action: '',
         p2Action: '',
-        p1Cooldowns: {}, // add cooldown maps
+        p1Cooldowns: {}, // cooldown maps
         p2Cooldowns: {},
+        p1Buffs: {},    // buff maps (name -> remaining turns)
+        p2Buffs: {},
         turn: 1,
         updatedAt: Date.now()
       });
@@ -426,27 +433,19 @@ class Game {
   async onRoomUpdate(data) {
     if(!data) return;
 
-    // --- FIX: host join handling (robuster tegen race) ---
-    // If host and a clientName exists and we're not already playing,
-    // transition to playing and ensure opponentName/HP are set.
+    // Host: ensure join robust
     if (this.isHost && data.clientName && this.state !== 'playing') {
-      // Mirror server HP to host view
+      // mirror baseline
       this.opponentName = data.clientName;
       this.playerHP = data.player1HP || 100;
       this.opponentHP = data.player2HP || 100;
       this.playerAction = null;
       this.opponentAction = null;
-
-      // If server still shows 'matchmaking', promote it to 'playing'.
-      // If it already is 'playing' we skip the update.
       try {
         if (data.state !== 'playing' && this.roomDocRef) {
           await this.roomDocRef.update({ state: 'playing', updatedAt: Date.now() });
         }
-      } catch (e) {
-        console.warn('Kon room state niet updaten naar playing:', e);
-      }
-
+      } catch (e) { console.warn('Kon room state niet updaten naar playing:', e); }
       this.state = 'playing';
       console.log(`${this.opponentName} joined!`);
       this.drawState();
@@ -460,18 +459,16 @@ class Game {
       this.opponentName = data.hostName || 'Host';
       const prevP = this.playerHP;
       const prevO = this.opponentHP;
-      // Store HP before update for damage tracking
+      // store previous for animation numbers
       this._prevPlayerHP = prevP;
       this._prevOpponentHP = prevO;
       this.playerHP = data.player2HP || 100;
       this.opponentHP = data.player1HP || 100;
-
-      // Sync local cooldowns for client from server
+      // Sync client cooldowns & buffs from server
       try {
         this.myCooldowns = JSON.parse(JSON.stringify(data.p2Cooldowns || {}));
-      } catch (_) { this.myCooldowns = {}; }
-      
-      // If state just changed to playing, initialize actions and draw
+        this.myBuffs = JSON.parse(JSON.stringify(data.p2Buffs || {}));
+      } catch (_) { this.myCooldowns = {}; this.myBuffs = {}; }
       if (this.state === 'playing' && prevState !== 'playing') {
         this.playerAction = null;
         this.opponentAction = null;
@@ -497,23 +494,29 @@ class Game {
       if(this.isHost) {
         // Host resolves when both actions present
         if(p1A && p2A) {
-          // apply on host authoritative state
+          // mirror server HP & actions into host
           this.playerHP = data.player1HP;
           this.opponentHP = data.player2HP;
           this.playerAction = p1A;
           this.opponentAction = p2A;
 
-          // Keep current cooldown maps from doc
+          // load cooldown & buff maps
           const p1Cooldowns = Object.assign({}, data.p1Cooldowns || {});
           const p2Cooldowns = Object.assign({}, data.p2Cooldowns || {});
+          const p1Buffs = Object.assign({}, data.p1Buffs || {});
+          const p2Buffs = Object.assign({}, data.p2Buffs || {});
+
+          // set host-local buff maps so resolveActions reads them
+          this.playerBuffs = JSON.parse(JSON.stringify(p1Buffs));
+          this.opponentBuffs = JSON.parse(JSON.stringify(p2Buffs));
 
           // perform resolution
           const beforeHP1 = data.player1HP;
           const beforeHP2 = data.player2HP;
           this.resolveActions();
 
-          // Decrement cooldowns for everyone (end of turn)
-          const dec = (map) => {
+          // Decrement cooldowns and buff durations (end of turn)
+          const decMap = (map) => {
             const out = {};
             for (const k in map) {
               const v = (map[k] || 0) - 1;
@@ -521,72 +524,80 @@ class Game {
             }
             return out;
           };
-          const nextP1 = dec(p1Cooldowns);
-          const nextP2 = dec(p2Cooldowns);
+          const nextP1Cooldowns = decMap(p1Cooldowns);
+          const nextP2Cooldowns = decMap(p2Cooldowns);
+          const nextP1Buffs = decMap(p1Buffs);
+          const nextP2Buffs = decMap(p2Buffs);
 
-          // If used actions have cooldowns, set them on the user side
-          const applyUsed = (usedAction, targetMap) => {
+          // If actions applied generate cooldowns or buffs for next turn
+          const applyUsedCooldown = (usedAction, targetCooldownMap) => {
             if (!usedAction) return;
             const aConf = this.attacksConfig[usedAction];
             const iConf = this.itemsConfig[usedAction];
             const cd = (aConf && aConf.cooldown) || (iConf && iConf.cooldown) || 0;
-            if (cd && cd > 0) targetMap[usedAction] = cd;
+            if (cd && cd > 0) targetCooldownMap[usedAction] = cd + 0; // set after dec
           };
-          applyUsed(p1A, nextP1);
-          applyUsed(p2A, nextP2);
+          const applyUsedBuff = (usedAction, targetBuffMap) => {
+            if (!usedAction) return;
+            const iConf = this.itemsConfig[usedAction];
+            if (iConf && iConf.duration) {
+              targetBuffMap[usedAction] = iConf.duration + 0;
+            }
+          };
+          applyUsedCooldown(p1A, nextP1Cooldowns);
+          applyUsedCooldown(p2A, nextP2Cooldowns);
+          applyUsedBuff(p1A, nextP1Buffs);
+          applyUsedBuff(p2A, nextP2Buffs);
 
+          // Compose update object
           const next = {
             player1HP: this.playerHP,
             player2HP: this.opponentHP,
             p1Action: '',
             p2Action: '',
-            p1Cooldowns: nextP1,
-            p2Cooldowns: nextP2,
+            p1Cooldowns: nextP1Cooldowns,
+            p2Cooldowns: nextP2Cooldowns,
+            p1Buffs: nextP1Buffs,
+            p2Buffs: nextP2Buffs,
             turn: (data.turn || 1) + 1,
             updatedAt: Date.now(),
             lastP1Action: p1A,
             lastP2Action: p2A,
             lastResolvedAt: Date.now()
           };
-          // game over check
-          if(this.playerHP <= 0 || this.opponentHP <= 0) {
-            next.state = 'gameover';
-          }
+          if(this.playerHP <= 0 || this.opponentHP <= 0) next.state = 'gameover';
           await this.roomDocRef.update(next);
-          // reset local chosen actions for host view
+
+          // clear local chosen actions and sync host-local cooldowns/buffs
           this.playerAction = null;
           this.opponentAction = null;
-          // Host keeps local cooldowns in sync with nextP1
-          this.myCooldowns = JSON.parse(JSON.stringify(nextP1 || {}));
+          this.myCooldowns = JSON.parse(JSON.stringify(nextP1Cooldowns || {}));
+          this.playerBuffs = JSON.parse(JSON.stringify(nextP1Buffs || {}));
+          this.opponentBuffs = JSON.parse(JSON.stringify(nextP2Buffs || {}));
+
           // start animation using previous HPs
           this.startActionAnimation(p1A, p2A, beforeHP1, beforeHP2);
         }
       } else {
-        // Client clears its local chosen action once host resolved
-        if(!p2A && this.playerAction) {
-          this.playerAction = null;
-        }
-        // Sync client cooldowns from server each update
+        // Client: clear local chosen action when host cleared theirs, and sync cooldowns/buffs
+        if(!p2A && this.playerAction) this.playerAction = null;
         try {
           this.myCooldowns = JSON.parse(JSON.stringify(data.p2Cooldowns || {}));
-        } catch (_) { this.myCooldowns = {}; }
+          this.myBuffs = JSON.parse(JSON.stringify(data.p2Buffs || {}));
+        } catch (_) { this.myCooldowns = {}; this.myBuffs = {}; }
 
-        // Trigger animation when host reports a resolved turn
+        // animation trigger
         const lrAt = data.lastResolvedAt || 0;
         if (lrAt && lrAt !== this.lastResolvedAtSeen) {
           this.lastResolvedAtSeen = lrAt;
           const lp1 = data.lastP1Action || '';
           const lp2 = data.lastP2Action || '';
-          // Use stored HP values before update for damage numbers
           const beforeP2 = this._prevPlayerHP !== undefined ? this._prevPlayerHP : this.playerHP;
           const beforeP1 = this._prevOpponentHP !== undefined ? this._prevOpponentHP : this.opponentHP;
-          // client perspective: our action first param
           this.startActionAnimation(lp2, lp1, beforeP2, beforeP1);
-          // Clear stored values after use
           this._prevPlayerHP = undefined;
           this._prevOpponentHP = undefined;
         }
-        // Always redraw to keep HP labels in sync
         this.drawState();
       }
     }
@@ -605,32 +616,30 @@ class Game {
     if(!snap.exists) return;
     const data = snap.data();
 
-    // --- FIX: allow host to choose immediately after client joined ---
-    // permit action when state is 'playing', OR when matchmaking but:
-    // - client (non-host) can pick during matchmaking (existing behavior), OR
-    // - host can pick tijdens matchmaking als clientName aanwezig is (client joined)
     const canActState =
       data.state === 'playing' ||
       (data.state === 'matchmaking' && (!this.isHost || (this.isHost && data.clientName)));
     if (!canActState) return;
 
-    // Also check server-side cooldown map so host/client cannot bypass cooldowns
     const serverCooldowns = this.isHost ? (data.p1Cooldowns || {}) : (data.p2Cooldowns || {});
     if (serverCooldowns && serverCooldowns[action] > 0) {
       console.log(`Actie '${action}' is nog in cooldown (${serverCooldowns[action]}).`);
       return;
     }
-
     if(data[field]) return; // already chosen this turn
 
     await this.roomDocRef.update({ [field]: action, updatedAt: Date.now() });
     console.log(`${this.playerName} chooses ${action}`);
 
-    // Reflect the choice locally immediately for responsive UI
+    // reflect locally and optimistic buff effect
     try {
       this.playerAction = action;
-      // mark local cooldown now to prevent double submit locally; real cooldown update occurs when host resolves
       this.useActionLocal(action);
+      // optimistic: if item grants buff, set myBuffs locally
+      const iConf = this.itemsConfig[action];
+      if (iConf && iConf.duration) {
+        this.myBuffs[action] = iConf.duration;
+      }
     } catch (_) {}
   }
 
@@ -652,37 +661,44 @@ class Game {
     return actions[Math.floor(Math.random()*actions.length)];
   }
 
-  // Enhanced resolution logic to handle multiple attack types and items
+  // Enhanced resolution logic to handle multiple attack types and items and buffs
   resolveActions() {
-    // Interpret actions
     const pAct = this.playerAction;
     const oAct = this.opponentAction;
 
-    // Helper to apply attack if eligible
-    const applyAttack = (attacker, defenderAct, conf, targetIsOpponent) => {
-      // defender can block via 'block' action or 'shield' item (treated as block)
-      const defenderBlocks = (defenderAct === 'block' || defenderAct === 'shield');
-      if (defenderBlocks) return 0;
-      const hit = Math.random() < (conf.hit || this.attackHitChance);
-      if (!hit) {
-        // message deferred to console - keep succinct
-        return 0;
-      }
-      return conf.damage || 0;
+    // Helper to check buff presence and config
+    const playerHas = (name) => !!(this.playerBuffs && this.playerBuffs[name]);
+    const oppHas = (name) => !!(this.opponentBuffs && this.opponentBuffs[name]);
+
+    // apply attack function for player
+    const applyPlayerAttack = () => {
+      if (!this.attacksConfig[pAct]) return;
+      const conf = this.attacksConfig[pAct];
+      let hitChance = conf.hit || this.attackHitChance;
+      if (playerHas('speed_boost')) hitChance += (this.itemsConfig['speed_boost'].speed || 0);
+      const didHit = Math.random() < hitChance;
+      if (!didHit) return;
+      let dmg = conf.damage || 0;
+      if (oppHas('defense_buff')) dmg = Math.ceil(dmg * (1 - (this.itemsConfig['defense_buff'].defense || 0)));
+      this.opponentHP -= dmg;
+    };
+    const applyOpponentAttack = () => {
+      if (!this.attacksConfig[oAct]) return;
+      const conf = this.attacksConfig[oAct];
+      let hitChance = conf.hit || this.attackHitChance;
+      if (oppHas('speed_boost')) hitChance += (this.itemsConfig['speed_boost'].speed || 0);
+      const didHit = Math.random() < hitChance;
+      if (!didHit) return;
+      let dmg = conf.damage || 0;
+      if (playerHas('defense_buff')) dmg = Math.ceil(dmg * (1 - (this.itemsConfig['defense_buff'].defense || 0)));
+      this.playerHP -= dmg;
     };
 
-    // Player attack
-    if (this.attacksConfig[pAct]) {
-      const dmg = applyAttack(this.playerAction, oAct, this.attacksConfig[pAct], true);
-      if (dmg > 0) this.opponentHP -= dmg;
-    }
-    // Opponent attack
-    if (this.attacksConfig[oAct]) {
-      const dmg = applyAttack(this.opponentAction, pAct, this.attacksConfig[oAct], false);
-      if (dmg > 0) this.playerHP -= dmg;
-    }
+    // apply attacks
+    applyPlayerAttack();
+    applyOpponentAttack();
 
-    // Items: healing
+    // items: healing
     if (pAct && this.itemsConfig[pAct] && this.itemsConfig[pAct].heal) {
       this.playerHP += this.itemsConfig[pAct].heal;
     }
@@ -690,20 +706,8 @@ class Game {
       this.opponentHP += this.itemsConfig[oAct].heal;
     }
 
-    // Run reduces chance to be hit slightly: implement as minor evasion if used
-    if (pAct === 'run' && this.attacksConfig[oAct]) {
-      // if opponent attacked and we ran, reduce damage by half chance
-      if (Math.random() < 0.5) {
-        this.playerHP += Math.floor((this.attacksConfig[oAct].damage || 0) / 2);
-      }
-    }
-    if (oAct === 'run' && this.attacksConfig[pAct]) {
-      if (Math.random() < 0.5) {
-        this.opponentHP += Math.floor((this.attacksConfig[pAct].damage || 0) / 2);
-      }
-    }
-
-    // Clamp HP
+    // run/evasion: slight extra chance to avoid damage already covered by hitChance adjustments earlier if needed
+    // clamp HP
     this.playerHP = Math.min(100, Math.max(0, this.playerHP));
     this.opponentHP = Math.min(100, Math.max(0, this.opponentHP));
   }

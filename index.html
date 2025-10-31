@@ -161,15 +161,25 @@
     <div class="row" style="width:100%">
       <canvas id="gameCanvas" width="700" height="320" style="border:1px solid #ccc; background:#f7f9fc; width:100%; max-width:820px"></canvas>
     </div>
-    <div class="row">
+    <div class="row" id="mainActions">
+      <button id="actMainAttack" disabled>Attack</button>
+      <button id="actMainBlock" disabled>Block</button>
+      <button id="actMainItem" disabled>Item</button>
+      <button id="actMainRun" disabled>Run</button>
+    </div>
+
+    <div class="row" id="attackChoices" style="display:none">
       <button id="actLight" disabled>Light</button>
       <button id="actHeavy" disabled>Heavy</button>
       <button id="actSpecial" disabled>Special</button>
-      <button id="actBlock" disabled>Block</button>
-      <button id="actRun" disabled>Run</button>
+      <button id="actBackFromAttack">Back</button>
+    </div>
+
+    <div class="row" id="itemChoices" style="display:none">
       <button id="actHealSmall" disabled>Heal+</button>
-      <button id="actHealBig" disabled>Heal++</button>
-      <button id="actShield" disabled>Shield</button>
+      <button id="actSpeed" disabled>Speed</button>
+      <button id="actDefBuff" disabled>Def Buff</button>
+      <button id="actBackFromItem">Back</button>
     </div>
     <div id="state" class="hp"></div>
     <div id="log" aria-live="polite"></div>
@@ -383,71 +393,160 @@
           if (val) document.getElementById('room').value = val;
         });
 
-        ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-          // removed old mapping
-        });
-        // new mappings for expanded actions
-        const actionMap = {
+        // Remove previous flat actionMap usage and instead define detailed maps
+        const attackMap = {
           actLight: 'light',
           actHeavy: 'heavy',
-          actSpecial: 'special',
-          actBlock: 'block',
-          actRun: 'run',
-          actHealSmall: 'heal_small',
-          actHealBig: 'heal_big',
-          actShield: 'shield'
+          actSpecial: 'special'
         };
-        Object.keys(actionMap).forEach(id => {
+        const itemMap = {
+          actHealSmall: 'heal_small',
+          actSpeed: 'speed_boost',
+          actDefBuff: 'defense_buff'
+        };
+
+        // Wire sub-choice buttons
+        Object.keys(attackMap).forEach(id => {
           const el = document.getElementById(id);
           if (!el) return;
           el.addEventListener('click', () => {
-            const action = actionMap[id];
+            const action = attackMap[id];
             game.submitAction(action);
+            // after choosing, auto-return to main view (visual)
+            document.getElementById('attackChoices').style.display = 'none';
+            document.getElementById('mainActions').style.display = '';
+            updateState();
+          });
+        });
+        Object.keys(itemMap).forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('click', () => {
+            const action = itemMap[id];
+            game.submitAction(action);
+            document.getElementById('itemChoices').style.display = 'none';
+            document.getElementById('mainActions').style.display = '';
             updateState();
           });
         });
 
-         // Enable/disable action buttons based on state (optimized with requestAnimationFrame)
-         let lastSyncTime = 0;
-         function syncControls() {
-           const now = performance.now();
-           if (now - lastSyncTime < 100) {
-             requestAnimationFrame(syncControls);
-             return; // Throttle to ~10fps for UI updates
-           }
-           lastSyncTime = now;
-           
-           // Enable buttons when playing and no action chosen yet
-           // For each action button, compute enabled state individually and show cooldown if any
-           Object.keys(actionMap).forEach(id => {
-             const el = document.getElementById(id);
-             if (!el) return;
-             const action = actionMap[id];
-             let enabled = false;
-             if (game.state === 'playing' && !game.playerAction) {
-               // check per-action cooldown via Game.canUseAction (works for online and local)
-               try {
-                 enabled = game.canUseAction(action);
-               } catch (_) {
-                 enabled = false;
-               }
-             }
-             el.disabled = !enabled;
-             // append cooldown indicator if present
-             const cd = game.getRemainingCooldown ? game.getRemainingCooldown(action) : 0;
-             if (cd > 0) {
-               // keep button label compact
-               el.textContent = `${el.dataset.base || el.textContent.split(' (')[0]} (CD:${cd})`;
-             } else {
-               // restore base label if stored
-               if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
-               el.textContent = el.dataset.base;
-             }
-           });
-           stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
-           requestAnimationFrame(syncControls);
-         }
-         requestAnimationFrame(syncControls);
+        // Main action toggles
+        document.getElementById('actMainAttack').addEventListener('click', () => {
+          document.getElementById('mainActions').style.display = 'none';
+          document.getElementById('attackChoices').style.display = '';
+        });
+        document.getElementById('actMainItem').addEventListener('click', () => {
+          document.getElementById('mainActions').style.display = 'none';
+          document.getElementById('itemChoices').style.display = '';
+        });
+        document.getElementById('actBackFromAttack').addEventListener('click', () => {
+          document.getElementById('attackChoices').style.display = 'none';
+          document.getElementById('mainActions').style.display = '';
+        });
+        document.getElementById('actBackFromItem').addEventListener('click', () => {
+          document.getElementById('itemChoices').style.display = 'none';
+          document.getElementById('mainActions').style.display = '';
+        });
+
+        // Keep Block and Run on mainActions
+        document.getElementById('actMainBlock').addEventListener('click', () => {
+          game.submitAction('block');
+          updateState();
+        });
+        document.getElementById('actMainRun').addEventListener('click', () => {
+          game.submitAction('run');
+          updateState();
+        });
+
+        // Stop button: ensure room is removed (host) and UI resets
+        btnStopGame.addEventListener('click', async () => {
+          try {
+            if (game && typeof game.stopOnlineGame === 'function') {
+              await game.stopOnlineGame();
+            } else if (game && typeof game.deleteOnlineRoom === 'function') {
+              await game.deleteOnlineRoom();
+            }
+          } catch (_) {}
+          window.__showEndButtons(false);
+          btnHostOnline.disabled = false;
+          btnJoinOnline.disabled = false;
+          btnBack.disabled = true;
+          // reset action UI to main
+          document.getElementById('mainActions').style.display = '';
+          document.getElementById('attackChoices').style.display = 'none';
+          document.getElementById('itemChoices').style.display = 'none';
+          updateState();
+        });
+
+        // Sync controls: enable main buttons and sub-buttons with cooldowns/buffs display
+        let lastSyncTime = 0;
+        function syncControls() {
+          const now = performance.now();
+          if (now - lastSyncTime < 100) {
+            requestAnimationFrame(syncControls);
+            return;
+          }
+          lastSyncTime = now;
+
+          // enable main Attack if any attack choice available
+          const anyAttackAvailable = Object.values(attackMap).some(a => {
+            try { return game.canUseAction(a); } catch (_) { return false; }
+          });
+          const anyItemAvailable = Object.values(itemMap).some(a => {
+            try { return game.canUseAction(a); } catch (_) { return false; }
+          });
+
+          // main actions enabled when playing and no action chosen
+          const mainEnabled = (game.state === 'playing' && !game.playerAction);
+          document.getElementById('actMainAttack').disabled = !mainEnabled || !anyAttackAvailable;
+          document.getElementById('actMainBlock').disabled = !mainEnabled;
+          document.getElementById('actMainItem').disabled = !mainEnabled || !anyItemAvailable;
+          document.getElementById('actMainRun').disabled = !mainEnabled;
+
+          // sub-buttons: enable per-action and show cooldown if any
+          Object.keys(attackMap).forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const action = attackMap[id];
+            let enabled = false;
+            if (game.state === 'playing' && !game.playerAction) {
+              try { enabled = game.canUseAction(action); } catch(_) { enabled = false; }
+            }
+            el.disabled = !enabled;
+            const cd = game.getRemainingCooldown ? game.getRemainingCooldown(action) : 0;
+            if (cd > 0) {
+              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
+              el.textContent = `${el.dataset.base} (CD:${cd})`;
+            } else {
+              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
+              el.textContent = el.dataset.base;
+            }
+          });
+
+          Object.keys(itemMap).forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const action = itemMap[id];
+            let enabled = false;
+            if (game.state === 'playing' && !game.playerAction) {
+              try { enabled = game.canUseAction(action); } catch(_) { enabled = false; }
+            }
+            el.disabled = !enabled;
+            const cd = game.getRemainingCooldown ? game.getRemainingCooldown(action) : 0;
+            if (cd > 0) {
+              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
+              el.textContent = `${el.dataset.base} (CD:${cd})`;
+            } else {
+              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
+              el.textContent = el.dataset.base;
+            }
+          });
+
+          // Also update any visible buff indicators in state (optional)
+          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+          requestAnimationFrame(syncControls);
+        }
+        requestAnimationFrame(syncControls);
 
          updateState();
        })();
