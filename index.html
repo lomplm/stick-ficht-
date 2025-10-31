@@ -1,196 +1,135 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stick Fight Game</title>
+// ...existing code...
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #f3f4f6;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        max-width: 800px;
-        margin: 50px auto;
-        background: #fff;
-        padding: 24px;
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      }
-      h2 {
-        text-align: center;
-        color: #4c1d95;
-      }
-      .row {
+      // ...existing code...
+      .menu-buttons {
         display: flex;
-        justify-content: space-between;
-        margin-bottom: 16px;
+        gap: 20px;
+        justify-content: center;
+        margin: 20px 0;
       }
-      .row > div {
-        flex: 1;
-        margin-right: 8px;
-      }
-      .row > div:last-child {
-        margin-right: 0;
-      }
-      input {
-        width: 100%;
-        padding: 12px;
-        border: 2px solid #e0e7ff;
-        border-radius: 6px;
-        font-size: 16px;
-        margin-bottom: 8px;
-      }
-      button {
-        padding: 12px;
-        background-color: #4c1d95;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 16px;
-        transition: background 0.3s;
-      }
-      button:hover {
-        background-color: #3b0f6d;
-      }
-      .gameMode {
-        text-align: center;
-        padding: 24px;
-        border: 2px solid #667eea;
+      .menu-button {
+        padding: 15px 40px;
+        font-size: 18px;
         border-radius: 12px;
-        margin: 12px;
-        cursor: pointer;
-        transition: all 0.2s;
       }
-      .gameMode:hover {
-        background: rgba(102, 126, 234, 0.1);
-        transform: translateY(-2px);
-      }
-      .gameMode h3 {
-        margin: 0 0 8px 0;
-        color: #4c1d95;
-      }
-      .gameMode p {
-        margin: 0;
-        color: #6b7280;
-      }
-      .roomList {
-        max-height: 200px;
-        overflow-y: auto;
+      .rooms-list {
         background: #f8fafc;
-        border-radius: 8px;
-        padding: 8px;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 20px 0;
+        max-height: 300px;
+        overflow-y: auto;
       }
-      .roomItem {
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        cursor: pointer;
+      .room-item {
         display: flex;
-        align-items: center;
         justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        background: white;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
       }
-      .roomItem:hover {
-        background: #e0e7ff;
+      .room-item:hover {
+        border-color: #667eea;
       }
-      .status {
-        padding: 6px 12px;
-        border-radius: 16px;
-        background: #e0e7ff;
-        color: #4c1d95;
-        font-size: 14px;
-        font-weight: 600;
+      .host-setup {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+        margin: 20px 0;
       }
     </style>
-</head>
-<body>
+
     <div class="container">
       <h2>Stick Fight</h2>
       
-      <!-- Stap 1: Kies modus -->
-      <div id="modeSelect" class="row">
-        <div class="gameMode" onclick="selectMode('host')">
-          <h3>Host Game</h3>
-          <p>Start een nieuwe game waar anderen kunnen joinen</p>
-        </div>
-        <div class="gameMode" onclick="selectMode('join')">
-          <h3>Join Game</h3>
-          <p>Join een bestaande game van een andere speler</p>
+      <!-- Hoofdmenu -->
+      <div id="mainMenu">
+        <div class="menu-buttons">
+          <button class="menu-button" onclick="showHostSetup()">Host Game</button>
+          <button class="menu-button" onclick="showJoinList()">Join Game</button>
         </div>
       </div>
 
-      <!-- Stap 2: Host Setup -->
+      <!-- Host setup scherm -->
       <div id="hostSetup" style="display:none">
-        <div class="row">
+        <div class="host-setup">
           <input id="playerName" placeholder="Jouw naam" value="Speler" />
-          <input id="room" placeholder="Room code (optioneel)" />
-          <button id="btnHostOnline">Start Game</button>
-          <button onclick="backToModes()">Terug</button>
+          <button id="btnStartHost">Start Game</button>
+          <button onclick="showMainMenu()">Terug</button>
         </div>
       </div>
 
-      <!-- Stap 2: Join Setup -->
+      <!-- Join/Rooms lijst -->
       <div id="joinSetup" style="display:none">
-        <div class="row">
+        <div class="host-setup">
           <input id="joinPlayerName" placeholder="Jouw naam" value="Speler" />
-          <button id="btnRefreshRooms">Vernieuw Lijst</button>
-          <button onclick="backToModes()">Terug</button>
+          <button onclick="refreshRooms()">Vernieuw Lijst</button>
+          <button onclick="showMainMenu()">Terug</button>
         </div>
-        <div class="roomList">
-          <div id="roomsList">
-            <div class="roomItem" style="justify-content:center">
-              Klik 'Vernieuw Lijst' om games te zien
-            </div>
-          </div>
+        <div class="rooms-list" id="roomsList">
+          <div class="room-item">Klik 'Vernieuw Lijst' om games te zien</div>
         </div>
       </div>
 
-      <!-- Status indicator -->
-      <div id="gameStatus" class="status" style="display:none"></div>
-
-      <!-- Game canvas etc -->
+      <!-- Game area (canvas etc) -->
       <div id="gameArea" style="display:none">
-        <div class="row" style="width:100%">
-          <canvas id="gameCanvas" width="700" height="320"></canvas>
-        </div>
-        <!-- ...rest of game UI... -->
+        // ...rest of game UI...
       </div>
     </div>
 
-    <!-- ...existing Firebase setup... -->
-
     <script>
+      // ...existing Firebase setup...
+
       (function() {
         // ...existing code...
 
-        // UI Management functies
-        window.selectMode = function(mode) {
-          document.getElementById('modeSelect').style.display = 'none';
-          if (mode === 'host') {
-            document.getElementById('hostSetup').style.display = 'block';
-          } else {
-            document.getElementById('joinSetup').style.display = 'block';
-            refreshRooms(); // auto-refresh bij openen
-          }
-        }
-
-        window.backToModes = function() {
-          document.getElementById('modeSelect').style.display = 'flex';
+        // UI Management
+        window.showMainMenu = function() {
+          document.getElementById('mainMenu').style.display = 'block';
           document.getElementById('hostSetup').style.display = 'none';
           document.getElementById('joinSetup').style.display = 'none';
+          document.getElementById('gameArea').style.display = 'none';
         }
 
-        // Verbeterde rooms lijst
-        async function refreshRooms() {
+        window.showHostSetup = function() {
+          document.getElementById('mainMenu').style.display = 'none';
+          document.getElementById('hostSetup').style.display = 'block';
+        }
+
+        window.showJoinList = function() {
+          document.getElementById('mainMenu').style.display = 'none';
+          document.getElementById('joinSetup').style.display = 'block';
+          refreshRooms();
+        }
+
+        // Host game start
+        document.getElementById('btnStartHost').addEventListener('click', () => {
+          const name = document.getElementById('playerName').value || 'Speler';
+          const room = 'room-' + Math.random().toString(36).slice(2, 7);
+          
           if (!window.__db) {
-            console.log('Firebase niet geinitialiseerd.');
+            console.log('Firebase niet geinitialiseerd');
             return;
           }
+
+          game = new Game(name);
+          game.startOnline(window.__db, room, true);
+          document.getElementById('hostSetup').style.display = 'none';
+          document.getElementById('gameArea').style.display = 'block';
+        });
+
+        // Verbeterde rooms lijst
+        window.refreshRooms = async function() {
+          if (!window.__db) {
+            console.log('Firebase niet geinitialiseerd');
+            return;
+          }
+
           const roomsList = document.getElementById('roomsList');
-          roomsList.innerHTML = '<div class="roomItem" style="justify-content:center">Laden...</div>';
+          roomsList.innerHTML = '<div class="room-item">Laden...</div>';
           
           try {
             const snap = await window.__db
@@ -201,10 +140,7 @@
               .get();
 
             if (snap.empty) {
-              roomsList.innerHTML = `
-                <div class="roomItem" style="justify-content:center">
-                  Geen actieve games gevonden
-                </div>`;
+              roomsList.innerHTML = '<div class="room-item">Geen actieve games gevonden</div>';
               return;
             }
 
@@ -213,18 +149,15 @@
               const data = doc.data();
               const room = doc.id.replace(/^stickfight_/, '');
               const el = document.createElement('div');
-              el.className = 'roomItem';
+              el.className = 'room-item';
               el.innerHTML = `
-                <span>${data.hostName || '?'} (${room})</span>
-                <button onclick="joinRoom('${room}')">Join</button>
+                <span>${data.hostName || '?'} wacht op opponent</span>
+                <button onclick="joinRoom('${room}')">Join Game</button>
               `;
               roomsList.appendChild(el);
             });
           } catch (e) {
-            roomsList.innerHTML = `
-              <div class="roomItem" style="justify-content:center">
-                Error: ${e.message || 'Onbekende fout'}
-              </div>`;
+            roomsList.innerHTML = `<div class="room-item">Error: ${e.message || 'Onbekende fout'}</div>`;
           }
         }
 
@@ -235,33 +168,11 @@
           game.startOnline(window.__db, room, false);
           document.getElementById('joinSetup').style.display = 'none';
           document.getElementById('gameArea').style.display = 'block';
-          showStatus('Joining game...');
         }
 
-        // Status indicator
-        function showStatus(msg) {
-          const el = document.getElementById('gameStatus');
-          el.textContent = msg;
-          el.style.display = 'block';
-        }
-
-        // Update bestaande handlers
-        btnHostOnline.addEventListener('click', () => {
-          const room = document.getElementById('room').value || 'room-' + Math.random().toString(36).slice(2, 7);
-          const name = document.getElementById('playerName').value || 'Speler';
-          if (!window.__db) {
-            showStatus('Error: Firebase niet geinitialiseerd');
-            return;
-          }
-          game = new Game(name);
-          game.startOnline(window.__db, room, true);
-          document.getElementById('hostSetup').style.display = 'none';
-          document.getElementById('gameArea').style.display = 'block';
-          showStatus('Creating game...');
-        });
-
+        // Start in hoofdmenu
+        showMainMenu();
+        
         // ...rest of existing code...
       })();
     </script>
-</body>
-</html>
