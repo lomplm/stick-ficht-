@@ -49,6 +49,21 @@ class Game {
     this.lastLoggedPlayerHP = this.playerHP;
     this.lastLoggedOpponentHP = this.opponentHP;
     this.initRenderer();
+
+    this.turn = 1;
+    // cooldowns for local client perspective (actionName -> remaining turns)
+    this.myCooldowns = {};
+    // attack/item configs
+    this.attacksConfig = {
+      light: { damage: 15, hit: 0.9 },
+      heavy: { damage: 30, hit: 0.6, cooldown: 2 },
+      special: { damage: 40, hit: 0.45, cooldown: 5 }
+    };
+    this.itemsConfig = {
+      heal_small: { heal: 15, cooldown: 3 },
+      heal_big: { heal: 30, cooldown: 6 },
+      shield: { effect: 'block', cooldown: 4 } // acts like a block for that turn
+    };
   }
 
   // Show start menu
@@ -226,6 +241,44 @@ class Game {
     }
   }
 
+  // Helper: can current player use an action (respects cooldowns)
+  canUseAction(action) {
+    if (!action) return false;
+    // Always allow non-special default actions like 'run'/'block'
+    if (action === 'block' || action === 'run') return true;
+    // Attacks may have cooldown in config
+    const attack = this.attacksConfig[action];
+    if (attack && attack.cooldown) {
+      return !(this.myCooldowns[action] > 0);
+    }
+    const item = this.itemsConfig[action];
+    if (item) {
+      return !(this.myCooldowns[action] > 0);
+    }
+    // default allow (e.g., light attack with no cooldown)
+    return !(this.myCooldowns[action] > 0);
+  }
+
+  getRemainingCooldown(action) {
+    return this.myCooldowns[action] || 0;
+  }
+
+  // Local use: mark action as used and set its cooldown
+  useActionLocal(action) {
+    const attack = this.attacksConfig[action];
+    if (attack && attack.cooldown) this.myCooldowns[action] = attack.cooldown;
+    const item = this.itemsConfig[action];
+    if (item && item.cooldown) this.myCooldowns[action] = item.cooldown;
+  }
+
+  // Decrement all local cooldown counters (called after a turn resolved)
+  decrementLocalCooldowns() {
+    for (const k of Object.keys(this.myCooldowns)) {
+      if (this.myCooldowns[k] > 0) this.myCooldowns[k]--;
+      if (this.myCooldowns[k] <= 0) delete this.myCooldowns[k];
+    }
+  }
+
   submitAction(action) {
     if(this.isOnline) {
       this.submitActionOnline(action);
@@ -233,10 +286,18 @@ class Game {
     }
     if(this.state !== 'playing') return;
     if(this.playerAction) return; // already chosen
+    if (!this.canUseAction(action)) {
+      console.log(`Actie '${action}' is nog in cooldown.`);
+      return;
+    }
     this.playerAction = action;
     console.log(`${this.playerName} chooses ${action}`);
     this.send({ type: 'action', action });
-    if(this.isHost) this.tryResolveTurn();
+    if(this.isHost) {
+      // For local host resolution, mark used action and host will resolve
+      this.useActionLocal(action);
+      this.tryResolveTurn();
+    }
   }
 
   tryResolveTurn() {
@@ -247,6 +308,9 @@ class Game {
     const beforeP = this.playerHP;
     const beforeO = this.opponentHP;
     this.resolveActions();
+    // decrement local cooldowns and advance turn
+    this.decrementLocalCooldowns();
+    this.turn++;
     // Log alleen delta's voor host
     const dSelf = this.playerHP - beforeP;
     const dOpp = this.opponentHP - beforeO;
@@ -268,7 +332,7 @@ class Game {
       this.showGameOver();
       return;
     }
-    // Prepare next turn
+    // Prepare next turn (clear chosen actions)
     this.playerAction = null;
     this.opponentAction = null;
   }
@@ -337,6 +401,8 @@ class Game {
         player2HP: 100,
         p1Action: '',
         p2Action: '',
+        p1Cooldowns: {}, // add cooldown maps
+        p2Cooldowns: {},
         turn: 1,
         updatedAt: Date.now()
       });
@@ -399,6 +465,11 @@ class Game {
       this._prevOpponentHP = prevO;
       this.playerHP = data.player2HP || 100;
       this.opponentHP = data.player1HP || 100;
+
+      // Sync local cooldowns for client from server
+      try {
+        this.myCooldowns = JSON.parse(JSON.stringify(data.p2Cooldowns || {}));
+      } catch (_) { this.myCooldowns = {}; }
       
       // If state just changed to playing, initialize actions and draw
       if (this.state === 'playing' && prevState !== 'playing') {
@@ -431,12 +502,46 @@ class Game {
           this.opponentHP = data.player2HP;
           this.playerAction = p1A;
           this.opponentAction = p2A;
+
+          // Keep current cooldown maps from doc
+          const p1Cooldowns = Object.assign({}, data.p1Cooldowns || {});
+          const p2Cooldowns = Object.assign({}, data.p2Cooldowns || {});
+
+          // perform resolution
+          const beforeHP1 = data.player1HP;
+          const beforeHP2 = data.player2HP;
           this.resolveActions();
+
+          // Decrement cooldowns for everyone (end of turn)
+          const dec = (map) => {
+            const out = {};
+            for (const k in map) {
+              const v = (map[k] || 0) - 1;
+              if (v > 0) out[k] = v;
+            }
+            return out;
+          };
+          const nextP1 = dec(p1Cooldowns);
+          const nextP2 = dec(p2Cooldowns);
+
+          // If used actions have cooldowns, set them on the user side
+          const applyUsed = (usedAction, targetMap) => {
+            if (!usedAction) return;
+            const aConf = this.attacksConfig[usedAction];
+            const iConf = this.itemsConfig[usedAction];
+            const cd = (aConf && aConf.cooldown) || (iConf && iConf.cooldown) || 0;
+            if (cd && cd > 0) targetMap[usedAction] = cd;
+          };
+          applyUsed(p1A, nextP1);
+          applyUsed(p2A, nextP2);
+
           const next = {
             player1HP: this.playerHP,
             player2HP: this.opponentHP,
             p1Action: '',
             p2Action: '',
+            p1Cooldowns: nextP1,
+            p2Cooldowns: nextP2,
             turn: (data.turn || 1) + 1,
             updatedAt: Date.now(),
             lastP1Action: p1A,
@@ -448,11 +553,12 @@ class Game {
             next.state = 'gameover';
           }
           await this.roomDocRef.update(next);
-          // reset local chosen actions
-          const beforeHP1 = data.player1HP;
-          const beforeHP2 = data.player2HP;
+          // reset local chosen actions for host view
           this.playerAction = null;
           this.opponentAction = null;
+          // Host keeps local cooldowns in sync with nextP1
+          this.myCooldowns = JSON.parse(JSON.stringify(nextP1 || {}));
+          // start animation using previous HPs
           this.startActionAnimation(p1A, p2A, beforeHP1, beforeHP2);
         }
       } else {
@@ -460,6 +566,11 @@ class Game {
         if(!p2A && this.playerAction) {
           this.playerAction = null;
         }
+        // Sync client cooldowns from server each update
+        try {
+          this.myCooldowns = JSON.parse(JSON.stringify(data.p2Cooldowns || {}));
+        } catch (_) { this.myCooldowns = {}; }
+
         // Trigger animation when host reports a resolved turn
         const lrAt = data.lastResolvedAt || 0;
         if (lrAt && lrAt !== this.lastResolvedAtSeen) {
@@ -497,11 +608,18 @@ class Game {
     // --- FIX: allow host to choose immediately after client joined ---
     // permit action when state is 'playing', OR when matchmaking but:
     // - client (non-host) can pick during matchmaking (existing behavior), OR
-    // - host can pick during matchmaking if clientName is present (client joined)
-    const canAct =
+    // - host can pick tijdens matchmaking als clientName aanwezig is (client joined)
+    const canActState =
       data.state === 'playing' ||
       (data.state === 'matchmaking' && (!this.isHost || (this.isHost && data.clientName)));
-    if (!canAct) return;
+    if (!canActState) return;
+
+    // Also check server-side cooldown map so host/client cannot bypass cooldowns
+    const serverCooldowns = this.isHost ? (data.p1Cooldowns || {}) : (data.p2Cooldowns || {});
+    if (serverCooldowns && serverCooldowns[action] > 0) {
+      console.log(`Actie '${action}' is nog in cooldown (${serverCooldowns[action]}).`);
+      return;
+    }
 
     if(data[field]) return; // already chosen this turn
 
@@ -511,6 +629,8 @@ class Game {
     // Reflect the choice locally immediately for responsive UI
     try {
       this.playerAction = action;
+      // mark local cooldown now to prevent double submit locally; real cooldown update occurs when host resolves
+      this.useActionLocal(action);
     } catch (_) {}
   }
 
@@ -532,35 +652,57 @@ class Game {
     return actions[Math.floor(Math.random()*actions.length)];
   }
 
-  // Action resolution logic
+  // Enhanced resolution logic to handle multiple attack types and items
   resolveActions() {
-    // Simple example logic met miss-kans
-    const playerAttackEligible = this.playerAction === 'attack' && this.opponentAction !== 'block';
-    const opponentAttackEligible = this.opponentAction === 'attack' && this.playerAction !== 'block';
+    // Interpret actions
+    const pAct = this.playerAction;
+    const oAct = this.opponentAction;
 
-    if (playerAttackEligible) {
-      const hit = Math.random() < this.attackHitChance;
-      if (hit) {
-        this.opponentHP -= 20;
-      } else {
-        console.log(`${this.playerName}'s attack mist!`);
+    // Helper to apply attack if eligible
+    const applyAttack = (attacker, defenderAct, conf, targetIsOpponent) => {
+      // defender can block via 'block' action or 'shield' item (treated as block)
+      const defenderBlocks = (defenderAct === 'block' || defenderAct === 'shield');
+      if (defenderBlocks) return 0;
+      const hit = Math.random() < (conf.hit || this.attackHitChance);
+      if (!hit) {
+        // message deferred to console - keep succinct
+        return 0;
+      }
+      return conf.damage || 0;
+    };
+
+    // Player attack
+    if (this.attacksConfig[pAct]) {
+      const dmg = applyAttack(this.playerAction, oAct, this.attacksConfig[pAct], true);
+      if (dmg > 0) this.opponentHP -= dmg;
+    }
+    // Opponent attack
+    if (this.attacksConfig[oAct]) {
+      const dmg = applyAttack(this.opponentAction, pAct, this.attacksConfig[oAct], false);
+      if (dmg > 0) this.playerHP -= dmg;
+    }
+
+    // Items: healing
+    if (pAct && this.itemsConfig[pAct] && this.itemsConfig[pAct].heal) {
+      this.playerHP += this.itemsConfig[pAct].heal;
+    }
+    if (oAct && this.itemsConfig[oAct] && this.itemsConfig[oAct].heal) {
+      this.opponentHP += this.itemsConfig[oAct].heal;
+    }
+
+    // Run reduces chance to be hit slightly: implement as minor evasion if used
+    if (pAct === 'run' && this.attacksConfig[oAct]) {
+      // if opponent attacked and we ran, reduce damage by half chance
+      if (Math.random() < 0.5) {
+        this.playerHP += Math.floor((this.attacksConfig[oAct].damage || 0) / 2);
+      }
+    }
+    if (oAct === 'run' && this.attacksConfig[pAct]) {
+      if (Math.random() < 0.5) {
+        this.opponentHP += Math.floor((this.attacksConfig[pAct].damage || 0) / 2);
       }
     }
 
-    if (opponentAttackEligible) {
-      const hit = Math.random() < this.attackHitChance;
-      if (hit) {
-        this.playerHP -= 20;
-      } else {
-        console.log(`Opponent's attack mist!`);
-      }
-    }
-    if(this.playerAction === 'item') {
-      this.playerHP += 10; // heal
-    }
-    if(this.opponentAction === 'item') {
-      this.opponentHP += 10;
-    }
     // Clamp HP
     this.playerHP = Math.min(100, Math.max(0, this.playerHP));
     this.opponentHP = Math.min(100, Math.max(0, this.opponentHP));
