@@ -7,7 +7,7 @@
     <style>
       body {
         font-family: Arial, sans-serif;
-        background-color: #edf2f7;
+        background: linear-gradient(135deg, #667eea 0%, #f7fafc 100%);
         margin: 0;
         padding: 0;
       }
@@ -18,18 +18,28 @@
       }
       h2 {
         text-align: center;
-        color: #333;
+        color: #4c1d95;
+        text-shadow: 0 2px 8px #a5b4fc44;
       }
       .menu-buttons {
         display: flex;
         gap: 20px;
         justify-content: center;
-        margin: 20px 0;
+        margin: 32px 0;
       }
       .menu-button {
         padding: 15px 40px;
         font-size: 18px;
         border-radius: 12px;
+        background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 16px #6366f133;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .menu-button:hover {
+        background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
+        transform: scale(1.05);
       }
       .rooms-list {
         background: #f8fafc;
@@ -44,10 +54,11 @@
         justify-content: space-between;
         align-items: center;
         padding: 12px;
-        background: white;
+        background: linear-gradient(90deg, #e0e7ff 0%, #f7fafc 100%);
         margin-bottom: 8px;
         border-radius: 8px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid #6366f1;
+        color: #312e81;
       }
       .room-item:hover {
         border-color: #667eea;
@@ -64,6 +75,78 @@
         margin-top: 24px;
         display: none;
       }
+      .room-code-box {
+        background: linear-gradient(90deg, #fbbf24 0%, #f59e42 100%);
+        border-radius: 8px;
+        padding: 12px 24px;
+        margin: 16px auto 0 auto;
+        text-align: center;
+        font-size: 20px;
+        font-weight: bold;
+        color: #fff;
+        letter-spacing: 2px;
+        width: fit-content;
+        box-shadow: 0 2px 8px rgba(102,126,234,0.08);
+        animation: pulse 1.2s infinite alternate;
+      }
+      @keyframes pulse {
+        0% { box-shadow: 0 0 8px #fbbf24aa; }
+        100% { box-shadow: 0 0 24px #fbbf24cc; }
+      }
+      .waiting-status {
+        text-align: center;
+        margin-top: 18px;
+        font-size: 16px;
+        color: #6366f1;
+        font-weight: 600;
+        animation: blink 1.2s infinite alternate;
+      }
+      @keyframes blink {
+        0% { opacity: 1; }
+        100% { opacity: 0.6; }
+      }
+      .room-item button {
+        background: linear-gradient(135deg, #f59e42 0%, #fbbf24 100%);
+        color: #fff;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 18px;
+        font-size: 15px;
+        cursor: pointer;
+        transition: background 0.2s;
+        box-shadow: 0 2px 8px #fbbf2444;
+      }
+      .room-item button:hover {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e42 100%);
+      }
+      .host-setup input {
+        border: 2px solid #6366f1;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 16px;
+        background: #f7fafc;
+        color: #312e81;
+        transition: border 0.2s;
+      }
+      .host-setup input:focus {
+        border: 2px solid #fbbf24;
+        outline: none;
+      }
+      .host-setup button {
+        background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 24px;
+        font-size: 16px;
+        box-shadow: 0 2px 8px #6366f133;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .host-setup button:hover {
+        background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
+        transform: scale(1.05);
+      }
     </style>
 </head>
 <body>
@@ -71,25 +154,26 @@
     <h2>Stick Fight</h2>
     <!-- Hoofdmenu: alleen Host en Join -->
     <div id="mainMenu">
-      <div style="display:flex; gap:32px; justify-content:center; margin:32px 0;">
-        <button id="btnHost" style="padding:18px 48px; font-size:20px;">Host Game</button>
-        <button id="btnJoin" style="padding:18px 48px; font-size:20px;">Join Game</button>
+      <div class="menu-buttons">
+        <button id="btnHost" class="menu-button">Host Game</button>
+        <button id="btnJoin" class="menu-button">Join Game</button>
       </div>
     </div>
     <!-- Host setup: naam kiezen en starten -->
     <div id="hostSetup" style="display:none;">
-      <div style="display:flex; gap:12px; justify-content:center; align-items:center; margin:32px 0;">
+      <div class="host-setup">
         <input id="playerName" placeholder="Jouw naam" value="Speler" />
         <button id="btnStartHost">Start Game</button>
         <button id="btnBackHost">Terug</button>
       </div>
-      <div id="hostWait" style="text-align:center; margin-top:24px; display:none;">
-        <span>Wachten op speler...</span>
+      <div id="hostRoomCode" class="room-code-box" style="display:none;"></div>
+      <div id="hostWait" class="waiting-status" style="display:none;">
+        <span id="waitText">Wachten op speler...</span>
       </div>
     </div>
     <!-- Join: naam kiezen en lijst met open games -->
     <div id="joinSetup" style="display:none;">
-      <div style="display:flex; gap:12px; justify-content:center; align-items:center; margin:32px 0;">
+      <div class="host-setup">
         <input id="joinPlayerName" placeholder="Jouw naam" value="Speler" />
         <button id="btnRefreshRooms">Vernieuw Lijst</button>
         <button id="btnBackJoin">Terug</button>
@@ -107,17 +191,24 @@
     // ...existing Firebase setup...
     (function() {
       // ...existing code...
-      // UI logic
+      let currentRoomCode = null;
+      let hostGameStarted = false;
+
       function showMainMenu() {
         document.getElementById('mainMenu').style.display = 'block';
         document.getElementById('hostSetup').style.display = 'none';
         document.getElementById('joinSetup').style.display = 'none';
         document.getElementById('gameArea').style.display = 'none';
+        document.getElementById('hostRoomCode').style.display = 'none';
+        document.getElementById('hostWait').style.display = 'none';
+        hostGameStarted = false;
       }
       function showHostSetup() {
         document.getElementById('mainMenu').style.display = 'none';
         document.getElementById('hostSetup').style.display = 'block';
+        document.getElementById('hostRoomCode').style.display = 'none';
         document.getElementById('hostWait').style.display = 'none';
+        hostGameStarted = false;
       }
       function showJoinSetup() {
         document.getElementById('mainMenu').style.display = 'none';
@@ -130,16 +221,30 @@
       document.getElementById('btnBackJoin').onclick = showMainMenu;
 
       // Host game start
-      document.getElementById('btnStartHost').onclick = function() {
+      document.getElementById('btnStartHost').onclick = async function() {
+        if (hostGameStarted) return;
+        hostGameStarted = true;
         const name = document.getElementById('playerName').value || 'Speler';
-        const room = 'room-' + Math.random().toString(36).slice(2, 7);
+        // Genereer een korte, duidelijke room code
+        const room = 'ROOM-' + Math.random().toString(36).substr(2, 5).toUpperCase();
+        currentRoomCode = room;
+        document.getElementById('hostRoomCode').textContent = `Room code: ${room}`;
+        document.getElementById('hostRoomCode').style.display = 'block';
+        document.getElementById('hostWait').style.display = 'block';
+        document.getElementById('waitText').textContent = 'Wachten op speler...';
+
         if (!window.__db) {
-          console.log('Firebase niet geinitialiseerd');
+          document.getElementById('waitText').textContent = 'Firebase niet geinitialiseerd!';
           return;
         }
         game = new Game(name);
-        game.startOnline(window.__db, room, true);
-        document.getElementById('hostWait').style.display = 'block';
+        // Start game, maar update UI direct zodat joiners de room kunnen zien
+        try {
+          await game.startOnline(window.__db, room, true);
+        } catch (e) {
+          document.getElementById('waitText').textContent = 'Er ging iets mis met het starten van de game!';
+          hostGameStarted = false;
+        }
       };
 
       // Rooms lijst
@@ -169,7 +274,7 @@
             const el = document.createElement('div');
             el.className = 'room-item';
             el.innerHTML = `
-              <span>${data.hostName || '?'} wacht op opponent</span>
+              <span><b>${room}</b> — Host: ${data.hostName || '?'} wacht op speler</span>
               <button onclick="joinRoom('${room}')">Join Game</button>
             `;
             roomsList.appendChild(el);
