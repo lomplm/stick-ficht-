@@ -359,15 +359,29 @@ class Game {
 
   async onRoomUpdate(data) {
     if(!data) return;
-    // Transition to playing when both names set
-    if(this.isHost && data.clientName && data.state === 'matchmaking') {
-      await this.roomDocRef.update({ state: 'playing', updatedAt: Date.now() });
-      this.state = 'playing';
+
+    // --- FIX: host join handling (robuster tegen race) ---
+    // If host and a clientName exists and we're not already playing,
+    // transition to playing and ensure opponentName/HP are set.
+    if (this.isHost && data.clientName && this.state !== 'playing') {
+      // Mirror server HP to host view
       this.opponentName = data.clientName;
       this.playerHP = data.player1HP || 100;
       this.opponentHP = data.player2HP || 100;
       this.playerAction = null;
       this.opponentAction = null;
+
+      // If server still shows 'matchmaking', promote it to 'playing'.
+      // If it already is 'playing' we skip the update.
+      try {
+        if (data.state !== 'playing' && this.roomDocRef) {
+          await this.roomDocRef.update({ state: 'playing', updatedAt: Date.now() });
+        }
+      } catch (e) {
+        console.warn('Kon room state niet updaten naar playing:', e);
+      }
+
+      this.state = 'playing';
       console.log(`${this.opponentName} joined!`);
       this.drawState();
       return;
@@ -479,11 +493,25 @@ class Game {
     const snap = await this.roomDocRef.get();
     if(!snap.exists) return;
     const data = snap.data();
-    // Sta client toe om alvast te kiezen in matchmaking; host lost op zodra beide acties en state door host naar 'playing' gaat
-    if(data.state !== 'playing' && !(data.state === 'matchmaking' && !this.isHost)) return;
+
+    // --- FIX: allow host to choose immediately after client joined ---
+    // permit action when state is 'playing', OR when matchmaking but:
+    // - client (non-host) can pick during matchmaking (existing behavior), OR
+    // - host can pick during matchmaking if clientName is present (client joined)
+    const canAct =
+      data.state === 'playing' ||
+      (data.state === 'matchmaking' && (!this.isHost || (this.isHost && data.clientName)));
+    if (!canAct) return;
+
     if(data[field]) return; // already chosen this turn
+
     await this.roomDocRef.update({ [field]: action, updatedAt: Date.now() });
     console.log(`${this.playerName} chooses ${action}`);
+
+    // Reflect the choice locally immediately for responsive UI
+    try {
+      this.playerAction = action;
+    } catch (_) {}
   }
 
   // Loop remains unused in networked simultaneous turn mode
