@@ -1,556 +1,267 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stick Fight Demo</title>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stick Fight Game</title>
     <style>
-      * { box-sizing: border-box; }
-      body { 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Arial, sans-serif; 
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f3f4f6;
         margin: 0;
-        padding: 24px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        color: #333;
+        padding: 0;
       }
       .container {
-        max-width: 900px;
-        margin: 0 auto;
-        background: rgba(255, 255, 255, 0.95);
+        max-width: 800px;
+        margin: 50px auto;
+        background: #fff;
         padding: 24px;
-        border-radius: 16px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
       }
       h2 {
-        margin-top: 0;
-        color: #4c1d95;
-        font-size: 28px;
-        font-weight: 700;
         text-align: center;
-        margin-bottom: 20px;
+        color: #4c1d95;
       }
-      .row { 
-        display: flex; 
-        gap: 12px; 
-        margin-bottom: 16px; 
-        flex-wrap: wrap;
-        align-items: center;
+      .row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 16px;
       }
-      button { 
-        padding: 12px 20px; 
-        font-size: 14px; 
-        font-weight: 600;
-        cursor: pointer;
-        border: none;
-        border-radius: 8px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      .row > div {
+        flex: 1;
+        margin-right: 8px;
+      }
+      .row > div:last-child {
+        margin-right: 0;
+      }
+      input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e7ff;
+        border-radius: 6px;
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+      button {
+        padding: 12px;
+        background-color: #4c1d95;
         color: white;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
       }
-      button:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+      button:hover {
+        background-color: #3b0f6d;
       }
-      button:active:not(:disabled) {
-        transform: translateY(0);
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        background: #9ca3af;
-        box-shadow: none;
-      }
-      input, select {
-        padding: 10px 14px;
-        font-size: 14px;
-        border: 2px solid #e5e7eb;
-        border-radius: 8px;
-        transition: border-color 0.3s ease;
-      }
-      input:focus, select:focus {
-        outline: none;
-        border-color: #667eea;
-      }
-      #gameCanvas {
+      .gameMode {
+        text-align: center;
+        padding: 24px;
         border: 2px solid #667eea;
         border-radius: 12px;
-        background: linear-gradient(180deg, #e0e7ff 0%, #f7f9fc 100%);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-        display: block;
-        margin: 0 auto;
+        margin: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
       }
-      #log { 
-        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-        color: #e5ecff; 
-        padding: 16px; 
-        border-radius: 12px; 
-        min-height: 160px; 
-        white-space: pre-wrap;
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        line-height: 1.6;
-        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+      .gameMode:hover {
+        background: rgba(102, 126, 234, 0.1);
+        transform: translateY(-2px);
+      }
+      .gameMode h3 {
+        margin: 0 0 8px 0;
+        color: #4c1d95;
+      }
+      .gameMode p {
+        margin: 0;
+        color: #6b7280;
+      }
+      .roomList {
         max-height: 200px;
         overflow-y: auto;
-      }
-      #log::-webkit-scrollbar {
-        width: 8px;
-      }
-      #log::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-      }
-      #log::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-      }
-      #log::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.5);
-      }
-      .hp { 
-        font-weight: bold;
-        font-size: 16px;
-        color: #4c1d95;
-        padding: 12px;
-        background: rgba(102, 126, 234, 0.1);
+        background: #f8fafc;
         border-radius: 8px;
-        margin-bottom: 12px;
+        padding: 8px;
       }
-      #actAttack {
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+      .roomItem {
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
-      #actBlock {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      .roomItem:hover {
+        background: #e0e7ff;
       }
-      #actItem {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-      }
-      #actRun {
-        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
+      .status {
+        padding: 6px 12px;
+        border-radius: 16px;
+        background: #e0e7ff;
+        color: #4c1d95;
+        font-size: 14px;
+        font-weight: 600;
       }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div class="container">
-    <h2>Stick Fight</h2>
-    <div class="row">
-      <input id="playerName" placeholder="Jouw naam" value="Speler" />
-      <input id="room" placeholder="Room code (bv. my-room)" />
-      <button id="btnHostOnline">Host Online</button>
-      <button id="btnJoinOnline">Join Online</button>
-      <button id="btnBack" disabled>Back</button>
-      <button id="btnReset">Reset</button>
-    </div>
-    <div class="row">
-      <button id="btnRefreshRooms">Refresh Rooms</button>
-      <select id="roomsList" style="min-width:240px">
-        <option value="">(geen data)</option>
-      </select>
-      <button id="btnUseSelected">Gebruik selectie</button>
-    </div>
-    <div class="row">
-      <button id="btnPlayAgain" style="display:none">Nog een keer</button>
-      <button id="btnStopGame" style="display:none">Stoppen</button>
-    </div>
-    <div class="row" style="width:100%">
-      <canvas id="gameCanvas" width="700" height="320" style="border:1px solid #ccc; background:#f7f9fc; width:100%; max-width:820px"></canvas>
-    </div>
-    <div class="row" id="mainActions">
-      <button id="actMainAttack" disabled>Attack</button>
-      <button id="actMainBlock" disabled>Block</button>
-      <button id="actMainItem" disabled>Item</button>
-      <button id="actMainRun" disabled>Run</button>
+      <h2>Stick Fight</h2>
+      
+      <!-- Stap 1: Kies modus -->
+      <div id="modeSelect" class="row">
+        <div class="gameMode" onclick="selectMode('host')">
+          <h3>Host Game</h3>
+          <p>Start een nieuwe game waar anderen kunnen joinen</p>
+        </div>
+        <div class="gameMode" onclick="selectMode('join')">
+          <h3>Join Game</h3>
+          <p>Join een bestaande game van een andere speler</p>
+        </div>
+      </div>
+
+      <!-- Stap 2: Host Setup -->
+      <div id="hostSetup" style="display:none">
+        <div class="row">
+          <input id="playerName" placeholder="Jouw naam" value="Speler" />
+          <input id="room" placeholder="Room code (optioneel)" />
+          <button id="btnHostOnline">Start Game</button>
+          <button onclick="backToModes()">Terug</button>
+        </div>
+      </div>
+
+      <!-- Stap 2: Join Setup -->
+      <div id="joinSetup" style="display:none">
+        <div class="row">
+          <input id="joinPlayerName" placeholder="Jouw naam" value="Speler" />
+          <button id="btnRefreshRooms">Vernieuw Lijst</button>
+          <button onclick="backToModes()">Terug</button>
+        </div>
+        <div class="roomList">
+          <div id="roomsList">
+            <div class="roomItem" style="justify-content:center">
+              Klik 'Vernieuw Lijst' om games te zien
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status indicator -->
+      <div id="gameStatus" class="status" style="display:none"></div>
+
+      <!-- Game canvas etc -->
+      <div id="gameArea" style="display:none">
+        <div class="row" style="width:100%">
+          <canvas id="gameCanvas" width="700" height="320"></canvas>
+        </div>
+        <!-- ...rest of game UI... -->
+      </div>
     </div>
 
-    <div class="row" id="attackChoices" style="display:none">
-      <button id="actLight" disabled>Light</button>
-      <button id="actHeavy" disabled>Heavy</button>
-      <button id="actSpecial" disabled>Special</button>
-      <button id="actBackFromAttack">Back</button>
-    </div>
+    <!-- ...existing Firebase setup... -->
 
-    <div class="row" id="itemChoices" style="display:none">
-      <button id="actHealSmall" disabled>Heal+</button>
-      <button id="actSpeed" disabled>Speed</button>
-      <button id="actDefBuff" disabled>Def Buff</button>
-      <button id="actBackFromItem">Back</button>
-    </div>
-    <div id="state" class="hp"></div>
-    <div id="log" aria-live="polite"></div>
-    </div>
-
-    <script src="Untitled-1.js"></script>
-    <!-- Firebase compat SDKs (global firebase.*) -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script>
-      // 1) Vul je Firebase config hieronder in (Project settings -> Your apps -> SDK setup and configuration)
-      // Voorbeeld:
-      // const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
-      const firebaseConfig = {
-        apiKey: "AIzaSyAs07dGS6aFqshNei3n2edxnaBLrSsfRvA",
-        authDomain: "stick-ficht.firebaseapp.com",
-        projectId: "stick-ficht",
-        storageBucket: "stick-ficht.firebasestorage.app",
-        messagingSenderId: "198218024025",
-        appId: "1:198218024025:web:b1ade6fd2ab57f6a42dd48",
-        measurementId: "G-JCY8JXHB1W"
-      };
-      let db = null;
-      if (firebaseConfig) {
-        const app = firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore(app);
-        window.__db = db; // maak beschikbaar voor game code
-      }
-    </script>
     <script>
       (function() {
-        const logEl = document.getElementById('log');
-        const stateEl = document.getElementById('state');
-        const originalLog = console.log.bind(console);
-        console.log = function(...args) {
-          originalLog(...args);
-          const line = args.map(String).join(' ');
-          logEl.textContent += (logEl.textContent ? '\n' : '') + line;
-          logEl.scrollTop = logEl.scrollHeight;
-        };
+        // ...existing code...
 
-        const nameInput = document.getElementById('playerName');
-        function currentName() { return nameInput.value || 'Speler'; }
-        let game = new Game(currentName());
-
-        function updateState() {
-          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+        // UI Management functies
+        window.selectMode = function(mode) {
+          document.getElementById('modeSelect').style.display = 'none';
+          if (mode === 'host') {
+            document.getElementById('hostSetup').style.display = 'block';
+          } else {
+            document.getElementById('joinSetup').style.display = 'block';
+            refreshRooms(); // auto-refresh bij openen
+          }
         }
 
-        // Local Create/Join removed
+        window.backToModes = function() {
+          document.getElementById('modeSelect').style.display = 'flex';
+          document.getElementById('hostSetup').style.display = 'none';
+          document.getElementById('joinSetup').style.display = 'none';
+        }
 
-        document.getElementById('btnReset').addEventListener('click', () => {
-          game = new Game('Speler');
-          logEl.textContent = '';
-          updateState();
-        });
-
-        // Online hosting/joinen via Firestore
-        const btnHostOnline = document.getElementById('btnHostOnline');
-        const btnJoinOnline = document.getElementById('btnJoinOnline');
-        const btnBack = document.getElementById('btnBack');
-        const btnPlayAgain = document.getElementById('btnPlayAgain');
-        const btnStopGame = document.getElementById('btnStopGame');
-
-        btnHostOnline.addEventListener('click', () => {
-          const room = document.getElementById('room').value || 'room-1';
-          if (!window.__db) {
-            console.log('Vul eerst je Firebase config in (index.html).');
-            return;
-          }
-          game = new Game(currentName());
-          game.startOnline(window.__db, room, true);
-          updateState();
-          // Disable opposite option until Back
-          btnJoinOnline.disabled = true;
-          btnBack.disabled = false;
-        });
-        btnJoinOnline.addEventListener('click', () => {
-          const room = document.getElementById('room').value || 'room-1';
-          if (!window.__db) {
-            console.log('Vul eerst je Firebase config in (index.html).');
-            return;
-          }
-          game = new Game(currentName());
-          game.startOnline(window.__db, room, false);
-          updateState();
-          // Disable opposite option until Back
-          btnHostOnline.disabled = true;
-          btnBack.disabled = false;
-        });
-
-        // Back button: leave lobby/match and re-enable options
-        btnBack.addEventListener('click', async () => {
-          if (game && typeof game.onBack === 'function') {
-            await game.onBack();
-          }
-          btnHostOnline.disabled = false;
-          btnJoinOnline.disabled = false;
-          btnBack.disabled = true;
-          btnPlayAgain.style.display = 'none';
-          btnStopGame.style.display = 'none';
-        });
-
-        // Rooms lijst ophalen en gebruiken
+        // Verbeterde rooms lijst
         async function refreshRooms() {
           if (!window.__db) {
-            console.log('Firebase niet geinitialiseerd. Vul config in.');
+            console.log('Firebase niet geinitialiseerd.');
             return;
           }
-          const select = document.getElementById('roomsList');
-          select.innerHTML = '';
+          const roomsList = document.getElementById('roomsList');
+          roomsList.innerHTML = '<div class="roomItem" style="justify-content:center">Laden...</div>';
+          
           try {
-            let snap;
-            try {
-              // Voorkeursquery met sortering (vereist composite index in Firestore)
-              snap = await window.__db
-                .collection('rooms')
-                .where('state','==','matchmaking')
-                .orderBy('updatedAt','desc')
-                .limit(50)
-                .get();
-            } catch (err) {
-              // Fallback zonder index: haal alle rooms op, filter en sorteer client-side
-              console.log('Index ontbreekt; client-side filter/sort wordt gebruikt. Maak de index aan voor betere performance.');
-              snap = await window.__db
-                .collection('rooms')
-                .limit(200)
-                .get();
-              // Zet om naar array, filter state === matchmaking en sorteer
-              const docs = snap.docs
-                .map(d => ({ id: d.id, data: d.data(), ref: d.ref }))
-                .filter(x => (x.data && x.data.state) === 'matchmaking')
-                .sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
-              // Cleanup: verwijder rooms ouder dan 10 minuten
-              const threshold = Date.now() - 10 * 60 * 1000;
-              for (const d of docs) {
-                if ((d.data.updatedAt || 0) < threshold) {
-                  try { await d.ref.delete(); } catch (_) {}
-                }
-              }
-              // Render en return vroegtijdig
-              if (docs.length === 0) {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = '(geen open rooms)';
-                select.appendChild(opt);
-              } else {
-                docs.forEach(({ id, data }) => {
-                  const room = id.replace(/^stickfight_/, '');
-                  const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
-                  const opt = document.createElement('option');
-                  opt.value = room;
-                  opt.textContent = label;
-                  select.appendChild(opt);
-                });
-              }
+            const snap = await window.__db
+              .collection('rooms')
+              .where('state','==','matchmaking')
+              .orderBy('updatedAt','desc')
+              .limit(10)
+              .get();
+
+            if (snap.empty) {
+              roomsList.innerHTML = `
+                <div class="roomItem" style="justify-content:center">
+                  Geen actieve games gevonden
+                </div>`;
               return;
             }
 
-            if (snap.empty) {
-              const opt = document.createElement('option');
-              opt.value = '';
-              opt.textContent = '(geen open rooms)';
-              select.appendChild(opt);
-            } else {
-              const threshold = Date.now() - 10 * 60 * 1000;
-              const removals = [];
-              snap.forEach(doc => {
-                const data = doc.data();
-                if ((data.updatedAt || 0) < threshold) {
-                  removals.push(doc.ref.delete().catch(()=>{}));
-                } else {
-                  const id = doc.id; // stickfight_<room>
-                  const room = id.replace(/^stickfight_/, '');
-                  const label = `${room} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
-                  const opt = document.createElement('option');
-                  opt.value = room;
-                  opt.textContent = label;
-                  select.appendChild(opt);
-                }
-              });
-              if (removals.length) { try { await Promise.all(removals); } catch(_) {} }
-            }
+            roomsList.innerHTML = '';
+            snap.forEach(doc => {
+              const data = doc.data();
+              const room = doc.id.replace(/^stickfight_/, '');
+              const el = document.createElement('div');
+              el.className = 'roomItem';
+              el.innerHTML = `
+                <span>${data.hostName || '?'} (${room})</span>
+                <button onclick="joinRoom('${room}')">Join</button>
+              `;
+              roomsList.appendChild(el);
+            });
           } catch (e) {
-            console.log('Rooms laden faalde:', e && e.message ? e.message : e);
+            roomsList.innerHTML = `
+              <div class="roomItem" style="justify-content:center">
+                Error: ${e.message || 'Onbekende fout'}
+              </div>`;
           }
         }
 
-        // Expose helpers for Game to toggle end-of-game buttons
-        window.__showEndButtons = function(show) {
-          btnPlayAgain.style.display = show ? '' : 'none';
-          btnStopGame.style.display = show ? '' : 'none';
-        };
+        // Join functie
+        window.joinRoom = function(room) {
+          const name = document.getElementById('joinPlayerName').value || 'Speler';
+          game = new Game(name);
+          game.startOnline(window.__db, room, false);
+          document.getElementById('joinSetup').style.display = 'none';
+          document.getElementById('gameArea').style.display = 'block';
+          showStatus('Joining game...');
+        }
 
-        btnPlayAgain.addEventListener('click', async () => {
-          if (game && typeof game.resetOnlineGame === 'function') {
-            await game.resetOnlineGame();
-            window.__showEndButtons(false);
-          }
-        });
-        btnStopGame.addEventListener('click', async () => {
-          if (game && typeof game.stopOnlineGame === 'function') {
-            await game.stopOnlineGame();
-            window.__showEndButtons(false);
-          }
-        });
-        document.getElementById('btnRefreshRooms').addEventListener('click', refreshRooms);
-        document.getElementById('btnUseSelected').addEventListener('click', () => {
-          const sel = document.getElementById('roomsList');
-          const val = sel.value;
-          if (val) document.getElementById('room').value = val;
-        });
+        // Status indicator
+        function showStatus(msg) {
+          const el = document.getElementById('gameStatus');
+          el.textContent = msg;
+          el.style.display = 'block';
+        }
 
-        // Remove previous flat actionMap usage and instead define detailed maps
-        const attackMap = {
-          actLight: 'light',
-          actHeavy: 'heavy',
-          actSpecial: 'special'
-        };
-        const itemMap = {
-          actHealSmall: 'heal_small',
-          actSpeed: 'speed_boost',
-          actDefBuff: 'defense_buff'
-        };
-
-        // Wire sub-choice buttons
-        Object.keys(attackMap).forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener('click', () => {
-            const action = attackMap[id];
-            game.submitAction(action);
-            // after choosing, auto-return to main view (visual)
-            document.getElementById('attackChoices').style.display = 'none';
-            document.getElementById('mainActions').style.display = '';
-            updateState();
-          });
-        });
-        Object.keys(itemMap).forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener('click', () => {
-            const action = itemMap[id];
-            game.submitAction(action);
-            document.getElementById('itemChoices').style.display = 'none';
-            document.getElementById('mainActions').style.display = '';
-            updateState();
-          });
-        });
-
-        // Main action toggles
-        document.getElementById('actMainAttack').addEventListener('click', () => {
-          document.getElementById('mainActions').style.display = 'none';
-          document.getElementById('attackChoices').style.display = '';
-        });
-        document.getElementById('actMainItem').addEventListener('click', () => {
-          document.getElementById('mainActions').style.display = 'none';
-          document.getElementById('itemChoices').style.display = '';
-        });
-        document.getElementById('actBackFromAttack').addEventListener('click', () => {
-          document.getElementById('attackChoices').style.display = 'none';
-          document.getElementById('mainActions').style.display = '';
-        });
-        document.getElementById('actBackFromItem').addEventListener('click', () => {
-          document.getElementById('itemChoices').style.display = 'none';
-          document.getElementById('mainActions').style.display = '';
-        });
-
-        // Keep Block and Run on mainActions
-        document.getElementById('actMainBlock').addEventListener('click', () => {
-          game.submitAction('block');
-          updateState();
-        });
-        document.getElementById('actMainRun').addEventListener('click', () => {
-          game.submitAction('run');
-          updateState();
-        });
-
-        // Stop button: ensure room is removed (host) and UI resets
-        btnStopGame.addEventListener('click', async () => {
-          try {
-            if (game && typeof game.stopOnlineGame === 'function') {
-              await game.stopOnlineGame();
-            } else if (game && typeof game.deleteOnlineRoom === 'function') {
-              await game.deleteOnlineRoom();
-            }
-          } catch (_) {}
-          window.__showEndButtons(false);
-          btnHostOnline.disabled = false;
-          btnJoinOnline.disabled = false;
-          btnBack.disabled = true;
-          // reset action UI to main
-          document.getElementById('mainActions').style.display = '';
-          document.getElementById('attackChoices').style.display = 'none';
-          document.getElementById('itemChoices').style.display = 'none';
-          updateState();
-        });
-
-        // Sync controls: enable main buttons and sub-buttons with cooldowns/buffs display
-        let lastSyncTime = 0;
-        function syncControls() {
-          const now = performance.now();
-          if (now - lastSyncTime < 100) {
-            requestAnimationFrame(syncControls);
+        // Update bestaande handlers
+        btnHostOnline.addEventListener('click', () => {
+          const room = document.getElementById('room').value || 'room-' + Math.random().toString(36).slice(2, 7);
+          const name = document.getElementById('playerName').value || 'Speler';
+          if (!window.__db) {
+            showStatus('Error: Firebase niet geinitialiseerd');
             return;
           }
-          lastSyncTime = now;
+          game = new Game(name);
+          game.startOnline(window.__db, room, true);
+          document.getElementById('hostSetup').style.display = 'none';
+          document.getElementById('gameArea').style.display = 'block';
+          showStatus('Creating game...');
+        });
 
-          // enable main Attack if any attack choice available
-          const anyAttackAvailable = Object.values(attackMap).some(a => {
-            try { return game.canUseAction(a); } catch (_) { return false; }
-          });
-          const anyItemAvailable = Object.values(itemMap).some(a => {
-            try { return game.canUseAction(a); } catch (_) { return false; }
-          });
-
-          // main actions enabled when playing and no action chosen
-          const mainEnabled = (game.state === 'playing' && !game.playerAction);
-          document.getElementById('actMainAttack').disabled = !mainEnabled || !anyAttackAvailable;
-          document.getElementById('actMainBlock').disabled = !mainEnabled;
-          document.getElementById('actMainItem').disabled = !mainEnabled || !anyItemAvailable;
-          document.getElementById('actMainRun').disabled = !mainEnabled;
-
-          // sub-buttons: enable per-action and show cooldown if any
-          Object.keys(attackMap).forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const action = attackMap[id];
-            let enabled = false;
-            if (game.state === 'playing' && !game.playerAction) {
-              try { enabled = game.canUseAction(action); } catch(_) { enabled = false; }
-            }
-            el.disabled = !enabled;
-            const cd = game.getRemainingCooldown ? game.getRemainingCooldown(action) : 0;
-            if (cd > 0) {
-              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
-              el.textContent = `${el.dataset.base} (CD:${cd})`;
-            } else {
-              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
-              el.textContent = el.dataset.base;
-            }
-          });
-
-          Object.keys(itemMap).forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const action = itemMap[id];
-            let enabled = false;
-            if (game.state === 'playing' && !game.playerAction) {
-              try { enabled = game.canUseAction(action); } catch(_) { enabled = false; }
-            }
-            el.disabled = !enabled;
-            const cd = game.getRemainingCooldown ? game.getRemainingCooldown(action) : 0;
-            if (cd > 0) {
-              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
-              el.textContent = `${el.dataset.base} (CD:${cd})`;
-            } else {
-              if (!el.dataset.base) el.dataset.base = el.textContent.split(' (')[0];
-              el.textContent = el.dataset.base;
-            }
-          });
-
-          // Also update any visible buff indicators in state (optional)
-          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
-          requestAnimationFrame(syncControls);
-        }
-        requestAnimationFrame(syncControls);
-
-         updateState();
-       })();
-     </script>
-   </body>
-   </html>
-
+        // ...rest of existing code...
+      })();
+    </script>
+</body>
+</html>
