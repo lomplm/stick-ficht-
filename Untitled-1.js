@@ -265,12 +265,17 @@ class Game {
       return;
     }
     if(this.state !== 'playing') return;
-    if(this.playerAction && typeof action !== 'object') return; // already chosen
     if(this.opponentName === 'AI') {
-      // AI chooses random action
-      this.opponentAction = this.randomAction();
-      console.log(`${this.playerName} chooses ${this.playerAction}`);
-      console.log(`${this.opponentName} chooses ${this.opponentAction}`);
+      // AI chooses random action unless player blocks
+      if (this.playerAction === 'block') {
+        this.opponentAction = null;
+        console.log(`${this.playerName} chooses ${this.playerAction}`);
+        console.log(`${this.opponentName} does nothing`);
+      } else {
+        this.opponentAction = this.randomAction();
+        console.log(`${this.playerName} chooses ${this.playerAction}`);
+        console.log(`${this.opponentName} chooses ${this.opponentAction}`);
+      }
       // Resolve immediately
       const beforeP = this.playerHP;
       const beforeO = this.opponentHP;
