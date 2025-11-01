@@ -742,21 +742,30 @@ class Game {
 
     this.drawState();
 
+    // Determine and log result
+    let resultMessage = "";
+    if(this.playerHP <= 0 && this.opponentHP <= 0) {
+      resultMessage = "It's a draw!";
+    } else if(this.playerHP <= 0) {
+      resultMessage = `${this.opponentName} has won!`;
+    } else {
+      resultMessage = `${this.playerName} has won!`;
+      if(!this.isOnline) this.playerWins++;
+    }
+    console.log(resultMessage);
+
     if (this.isOnline) {
-      // Online: logic handled in onRoomUpdate
+      // Online: show options if host
+      if (this.isHost) {
+        // Show play again and stop options for host
+        if (typeof window !== 'undefined' && typeof window.__showHostGameOverOptions === 'function') window.__showHostGameOverOptions();
+      } else {
+        // Client waits for host decision
+        console.log("Waiting for host to decide...");
+      }
     } else {
       // Local: show game over buttons
       if (typeof window !== 'undefined' && typeof window.__showGameOver === 'function') window.__showGameOver();
-    }
-
-    // Log result
-    if(this.playerHP <= 0 && this.opponentHP <= 0) {
-      console.log("Draw!");
-    } else if(this.playerHP <= 0) {
-      console.log("You lose!");
-    } else {
-      console.log("You win!");
-      this.playerWins++;
     }
   }
 
