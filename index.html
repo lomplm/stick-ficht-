@@ -523,8 +523,8 @@
             // Local play: enable when playing and no action chosen
             enable = window.game.state === 'playing' && !window.game.playerAction;
           } else {
-            // Online play: enable when playing or matchmaking and no action chosen
-            enable = (window.game.state === 'playing' || window.game.state === 'matchmaking') && !window.game.playerAction;
+            // Online play: enable only when playing and no action chosen
+            enable = window.game.state === 'playing' && !window.game.playerAction;
           }
 
           ['actAttack','actBlock','actItem','actRun'].forEach(id => {
