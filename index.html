@@ -165,10 +165,10 @@
       <canvas id="gameCanvas" width="700" height="320" style="border:1px solid #ccc; background:#f7f9fc; width:100%; max-width:820px"></canvas>
     </div>
     <div class="row">
-      <button id="actAttack" disabled>Attack</button>
-      <button id="actBlock" disabled>Block</button>
-      <button id="actItem" disabled>Item</button>
-      <button id="actRun" disabled>Run</button>
+      <button id="actAttack">Attack</button>
+      <button id="actBlock">Block</button>
+      <button id="actItem">Item</button>
+      <button id="actRun">Run</button>
       <!-- Sub-action buttons for attack -->
       <button id="subAttackPunch" style="display:none">Punch</button>
       <button id="subAttackKick" style="display:none">Kick</button>
@@ -525,37 +525,63 @@
           window.__resetToMenu();
         });
 
-        // Enable/disable action buttons based on state (optimized with requestAnimationFrame)
-        let lastSyncTime = 0;
-        function syncControls() {
-          const now = performance.now();
-          if (now - lastSyncTime < 100) {
-            requestAnimationFrame(syncControls);
-            return; // Throttle to ~10fps for UI updates
-          }
-          lastSyncTime = now;
-          
-          // Enable buttons when playing and no action chosen yet
-          let enable = false;
-          if (!game.isOnline) {
-            // Local play: enable when playing and no action
-            enable = game.state === 'playing' && !game.playerAction;
-          } else {
-            // Online play
-            if (game.state === 'playing') {
-              // Both players can act when state is playing and they haven't chosen yet
-              enable = !game.playerAction;
-            }
-          }
-          
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.disabled = !enable;
-          });
-          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
-          requestAnimationFrame(syncControls);
-        }
+    // Enable/disable action buttons based on state
+
+    let lastSyncTime = 0;
+
+    function syncControls() {
+
+      const now = performance.now();
+
+      if (now - lastSyncTime < 100) {
+
         requestAnimationFrame(syncControls);
+
+        return; // Throttle to ~10fps for UI updates
+
+      }
+
+      lastSyncTime = now;
+
+      // Enable buttons when playing and no action chosen yet
+
+      let enable = false;
+
+      if (!game.isOnline) {
+
+        // Local play: enable when playing and no action
+
+        enable = game.state === 'playing' && !game.playerAction;
+
+      } else {
+
+        // Online play
+
+        if (game.state === 'playing' || game.state === 'matchmaking') {
+
+          // Both players can act when state is playing or matchmaking and they haven't chosen yet
+
+          enable = !game.playerAction;
+
+        }
+
+      }
+
+      ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+
+        const el = document.getElementById(id);
+
+        if (el) el.disabled = !enable;
+
+      });
+
+      stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+
+      requestAnimationFrame(syncControls);
+
+    }
+
+    requestAnimationFrame(syncControls);
 
         updateState();
       })();

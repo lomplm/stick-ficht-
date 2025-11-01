@@ -403,6 +403,8 @@ class Game {
         this.playerAction = null;
         this.opponentAction = null;
         this.drawState();
+        // Enable action buttons for client
+        if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
       }
       // Indien state al playing is en HP's gewijzigd, log deltas éénmalig bij verandering
       if (this.playerHP !== prevP || this.opponentHP !== prevO) {
