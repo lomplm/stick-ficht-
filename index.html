@@ -130,9 +130,13 @@
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
       }
-      #actRun {
-        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
+
+      .cooldown {
+        opacity: 0.3 !important;
+      }
+      #btnBackSub {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
       }
     </style>
   </head>
@@ -169,16 +173,19 @@
       <button id="actAttack">Attack</button>
       <button id="actBlock">Block</button>
       <button id="actItem">Item</button>
-      <button id="actRun">Run</button>
+      <button id="btnBackSub" style="display:none">Back</button>
       <!-- Sub-action buttons for attack -->
-      <button id="subAttackPunch" style="display:none">Punch</button>
-      <button id="subAttackKick" style="display:none">Kick</button>
-      <button id="subAttackUppercut" style="display:none">Uppercut</button>
-      <button id="subAttackSpecial" style="display:none">Special</button>
+      <button id="subAttackNormal" style="display:none">Normal Attack</button>
+      <button id="subAttackLight" style="display:none">Light Attack</button>
+      <button id="subAttackHeavy" style="display:none">Heavy Attack</button>
       <!-- Sub-action buttons for item -->
       <button id="subItemHeal" style="display:none">Heal</button>
       <button id="subItemSpeed" style="display:none">Speed Boost</button>
       <button id="subItemDefence" style="display:none">Defence Buff</button>
+    </div>
+    <div id="gameOverRow" class="row" style="display:none">
+      <button id="btnPlayAgain">Nog een keer</button>
+      <button id="btnBackToMenu">Terug</button>
     </div>
     <div id="state" class="hp"></div>
     <div id="log" aria-live="polite"></div>
@@ -420,20 +427,16 @@
 
         // Action button handlers
         document.getElementById('actAttack').addEventListener('click', () => {
-          if (window.game.isOnline) {
-            // Show sub-actions for online play
-            ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-              document.getElementById(id).style.display = 'none';
-            });
-            ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial'].forEach(id => {
-              document.getElementById(id).style.display = 'inline-block';
-              document.getElementById(id).disabled = false;
-            });
-          } else {
-            // Direct action for local play
-            window.game.submitAction({ type: 'attack', sub: 'punch' });
-            updateButtonStates();
-          }
+          // Show sub-actions for both local and online play
+          ['actAttack','actBlock','actItem'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          document.getElementById('btnBackSub').style.display = 'inline-block';
+          ['subAttackNormal','subAttackLight','subAttackHeavy'].forEach(id => {
+            document.getElementById(id).style.display = 'inline-block';
+            document.getElementById(id).disabled = false;
+          });
+          updateButtonStates();
         });
 
         document.getElementById('actBlock').addEventListener('click', () => {
@@ -442,45 +445,38 @@
         });
 
         document.getElementById('actItem').addEventListener('click', () => {
-          if (window.game.isOnline) {
-            // Show sub-actions for online play
-            ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-              document.getElementById(id).style.display = 'none';
-            });
-            ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
-              document.getElementById(id).style.display = 'inline-block';
-              document.getElementById(id).disabled = false;
-            });
-          } else {
-            // Direct action for local play
-            window.game.submitAction({ type: 'item', sub: 'heal' });
-            updateButtonStates();
-          }
+          // Show sub-actions for both local and online play
+          ['actAttack','actBlock','actItem'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          document.getElementById('btnBackSub').style.display = 'inline-block';
+          ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+            document.getElementById(id).style.display = 'inline-block';
+            document.getElementById(id).disabled = false;
+          });
+          updateButtonStates();
         });
 
-        document.getElementById('actRun').addEventListener('click', () => {
-          window.game.submitAction('run');
+
+
+        document.getElementById('btnBackSub').addEventListener('click', () => {
+          resetToMainActions();
           updateButtonStates();
         });
 
         // Sub-action handlers for attack
-        document.getElementById('subAttackPunch').addEventListener('click', () => {
-          window.game.submitAction({ type: 'attack', sub: 'punch' });
+        document.getElementById('subAttackNormal').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'normal' });
           resetToMainActions();
           updateButtonStates();
         });
-        document.getElementById('subAttackKick').addEventListener('click', () => {
-          window.game.submitAction({ type: 'attack', sub: 'kick' });
+        document.getElementById('subAttackLight').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'light' });
           resetToMainActions();
           updateButtonStates();
         });
-        document.getElementById('subAttackUppercut').addEventListener('click', () => {
-          window.game.submitAction({ type: 'attack', sub: 'uppercut' });
-          resetToMainActions();
-          updateButtonStates();
-        });
-        document.getElementById('subAttackSpecial').addEventListener('click', () => {
-          window.game.submitAction({ type: 'attack', sub: 'special' });
+        document.getElementById('subAttackHeavy').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'heavy' });
           resetToMainActions();
           updateButtonStates();
         });
@@ -505,12 +501,14 @@
         // Helper functions
         function resetToMainActions() {
           // Hide sub-action buttons
-          ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial',
+          ['subAttackNormal','subAttackLight','subAttackHeavy',
            'subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
             document.getElementById(id).style.display = 'none';
           });
+          // Hide back sub button
+          document.getElementById('btnBackSub').style.display = 'none';
           // Show main action buttons
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+          ['actAttack','actBlock','actItem'].forEach(id => {
             document.getElementById(id).style.display = '';
           });
         }
@@ -527,9 +525,51 @@
             enable = window.game.state === 'playing' && !window.game.playerAction;
           }
 
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+          ['actAttack','actBlock','actItem'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.disabled = !enable;
+            if (el) {
+              el.disabled = !enable;
+              // Apply cooldown visual - main button dimmed only if ALL sub-actions are on cooldown
+              let isOnCooldown = false;
+              if (window.game.playerCooldowns) {
+                const actionType = id.replace('act', '').toLowerCase();
+                if (actionType === 'parry') {
+                  isOnCooldown = window.game.playerCooldowns['parry'] > 0;
+                } else if (actionType === 'attack') {
+                  isOnCooldown = ['attack_normal', 'attack_light', 'attack_heavy'].every(key => window.game.playerCooldowns[key] > 0);
+                } else if (actionType === 'item') {
+                  isOnCooldown = ['item_heal', 'item_speed', 'item_defence'].every(key => window.game.playerCooldowns[key] > 0);
+                } else if (actionType === 'block') {
+                  isOnCooldown = false; // block has no cooldown
+                }
+              }
+              if (isOnCooldown) {
+                el.classList.add('cooldown');
+              } else {
+                el.classList.remove('cooldown');
+              }
+            }
+          });
+
+          // Update sub-button states based on specific cooldowns
+          const subButtons = [
+            { id: 'subAttackNormal', cooldownKey: 'attack_normal' },
+            { id: 'subAttackLight', cooldownKey: 'attack_light' },
+            { id: 'subAttackHeavy', cooldownKey: 'attack_heavy' },
+            { id: 'subItemHeal', cooldownKey: 'item_heal' },
+            { id: 'subItemSpeed', cooldownKey: 'item_speed' },
+            { id: 'subItemDefence', cooldownKey: 'item_defence' }
+          ];
+          subButtons.forEach(({ id, cooldownKey }) => {
+            const el = document.getElementById(id);
+            if (el) {
+              const isOnCooldown = window.game.playerCooldowns && window.game.playerCooldowns[cooldownKey] > 0;
+              if (isOnCooldown) {
+                el.classList.add('cooldown');
+              } else {
+                el.classList.remove('cooldown');
+              }
+            }
           });
 
           // Update state display
@@ -542,12 +582,49 @@
         // Periodic UI sync
         setInterval(updateButtonStates, 100);
 
+        // Game over handlers
+        document.getElementById('btnPlayAgain').addEventListener('click', () => {
+          if (window.game && window.game.isOnline) {
+            // For online games, signal play again
+            window.game.signalPlayAgain();
+          } else {
+            // For local games, restart immediately
+            window.game = new Game(currentName());
+            window.game.startLocal();
+            hideAllMenus();
+            document.getElementById('gameOverRow').style.display = 'none';
+            updateButtonStates();
+          }
+        });
+
+        document.getElementById('btnBackToMenu').addEventListener('click', () => {
+          if (window.game && window.game.isOnline) {
+            // For online games, signal back to menu
+            window.game.signalBackToMenu();
+          } else {
+            // For local games, go back to menu
+            showMenu();
+            document.getElementById('gameOverRow').style.display = 'none';
+          }
+        });
+
         // Expose functions for Game class
         window.__enableActions = updateButtonStates;
         window.__resetToMenu = showMenu;
         window.__onOpponentJoined = function() {
           hideAllMenus();
           updateButtonStates();
+        };
+        window.__showGameOver = function() {
+          document.getElementById('gameOverRow').style.display = '';
+          // Disable action buttons
+          ['actAttack','actBlock','actItem','actParry'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
+        };
+        window.__hideGameOver = function() {
+          document.getElementById('gameOverRow').style.display = 'none';
         };
 
       })();

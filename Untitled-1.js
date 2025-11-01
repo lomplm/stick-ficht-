@@ -40,7 +40,7 @@ class Game {
     this.lastPlayerActionDrawn = '';
     this.lastOpponentActionDrawn = '';
     this.animationStartMs = 0;
-    this.animationDurationMs = 800;
+    this.animationDurationMs = 1000;
     this.lastResolvedAtSeen = 0;
     this.animationFrameId = null;
     this.particles = [];
@@ -49,6 +49,9 @@ class Game {
     this.lastLoggedPlayerHP = this.playerHP;
     this.lastLoggedOpponentHP = this.opponentHP;
     this.playerBuffs = { speed: false, defence: false }; // track buffs
+    this.playerCooldowns = {}; // track action cooldowns
+    this.playerStunTurns = 0;
+    this.opponentStunTurns = 0;
     this.initRenderer();
   }
 
@@ -237,12 +240,25 @@ class Game {
 
   submitAction(action) {
     // If sub-action, action is an object: { type: 'attack', sub: 'punch' }
+    let fullAction;
     if (typeof action === 'object' && action.type === 'attack') {
-      this.playerAction = 'attack_' + action.sub;
+      fullAction = 'attack_' + action.sub;
     } else if (typeof action === 'object' && action.type === 'item') {
-      this.playerAction = 'item_' + action.sub;
+      fullAction = 'item_' + action.sub;
     } else {
-      this.playerAction = action;
+      fullAction = action;
+    }
+
+    // Prevent action if stunned
+    if (this.playerStunTurns > 0) {
+      console.log(`${this.playerName} is stunned and cannot act!`);
+      return;
+    }
+
+    this.playerAction = fullAction;
+    // Log preparation for defensive actions
+    if (fullAction === 'block') {
+      console.log(`${this.playerName} prepares to block!`);
     }
     if(this.isOnline) {
       this.submitActionOnline(this.playerAction);
@@ -259,6 +275,7 @@ class Game {
       const beforeP = this.playerHP;
       const beforeO = this.opponentHP;
       this.resolveActions();
+      console.log("Turn resolved.");
       // Log deltas
       const dSelf = this.playerHP - beforeP;
       const dOpp = this.opponentHP - beforeO;
@@ -277,8 +294,7 @@ class Game {
       // Prepare next turn
       this.playerAction = null;
       this.opponentAction = null;
-      // Re-enable buttons after turn
-      if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
+      console.log("Choose your next action.");
     } else {
       this.send({ type: 'action', action: this.playerAction });
       if(this.isHost) this.tryResolveTurn();
@@ -551,7 +567,7 @@ class Game {
   }
 
   randomAction() {
-    const actions = ['attack_punch', 'attack_kick', 'attack_uppercut', 'attack_special', 'block', 'item_heal', 'item_speed', 'item_defence', 'run'];
+    const actions = ['attack_normal', 'attack_light', 'attack_heavy'];
     return actions[Math.floor(Math.random()*actions.length)];
   }
 
@@ -571,12 +587,12 @@ class Game {
     let opponentSpeed = 1, opponentDefence = 1; // For demo, only player gets buffs
 
     // Attack logic
-    const playerAttackEligible = pType === 'attack' && oType !== 'block';
-    const opponentAttackEligible = oType === 'attack' && pType !== 'block';
+    const playerAttackEligible = pType === 'attack';
+    const opponentAttackEligible = oType === 'attack';
 
     // Damage values for sub-attacks
-    const attackValues = { punch: 15, kick: 18, uppercut: 22, special: 30 };
-    // Default to punch if not specified
+    const attackValues = { normal: 15, light: 12, heavy: 22 };
+    // Default to normal if not specified
     let playerDmg = attackValues[pSub] || 15;
     let opponentDmg = attackValues[oSub] || 15;
 
@@ -588,15 +604,75 @@ class Game {
     if (pType === 'block') playerDefence = this.playerBuffs.defence ? 0.3 : 0.6;
     if (oType === 'block') opponentDefence = 0.6;
 
-    if (playerAttackEligible) {
+    // Handle attacks against parry with stun and parry fail chances
+    if (pType === 'attack' && oType === 'parry') {
+      let parryFailChance = 0.2; // Balanced chance to fail
+      let stunChance = 0.4; // Balanced chance to stun
+      if (pSub === 'heavy') {
+        parryFailChance = 0.3; // Heavy harder to parry
+        stunChance = 0.2;
+      }
+
+      const parryFails = Math.random() < parryFailChance;
+      const stuns = Math.random() < stunChance;
+
+      if (parryFails) {
+        // Parry fails, deal damage with extra penalty
+        this.opponentHP -= Math.round((playerDmg + 5) * opponentDefence);
+        console.log(`${this.playerName}'s attack breaks through the parry!`);
+      } else {
+        console.log(`${this.playerName}'s attack is parried by ${this.opponentName}!`);
+      }
+
+      if (stuns) {
+        this.opponentStunTurns = 1; // Last 1 turn
+        console.log(`${this.opponentName} is stunned!`);
+      }
+    } else if (pType === 'attack' && oType === 'block') {
+      console.log(`${this.playerName}'s attack is blocked by ${this.opponentName}!`);
+    } else if (playerAttackEligible) {
       const hit = Math.random() < this.attackHitChance;
       if (hit) {
-        this.opponentHP -= Math.round(playerDmg * opponentDefence);
+        let totalDamage = Math.round(playerDmg * opponentDefence);
+        // Light attack has chance to hit twice
+        if (pSub === 'light' && Math.random() < 0.3) { // 30% chance for double hit
+          this.opponentHP -= totalDamage;
+          this.opponentHP -= totalDamage;
+          console.log(`${this.playerName}'s light attack hits twice for ${totalDamage} damage each!`);
+        } else {
+          this.opponentHP -= totalDamage;
+        }
       } else {
         console.log(`${this.playerName}'s attack mist!`);
       }
     }
-    if (opponentAttackEligible) {
+
+    if (oType === 'attack' && pType === 'parry') {
+      let parryFailChance = 0.2; // Balanced chance to fail
+      let stunChance = 0.4; // Balanced chance to stun
+      if (oSub === 'heavy') {
+        parryFailChance = 0.3; // Heavy harder to parry
+        stunChance = 0.2;
+      }
+
+      const parryFails = Math.random() < parryFailChance;
+      const stuns = Math.random() < stunChance;
+
+      if (parryFails) {
+        // Parry fails, deal damage with extra penalty
+        this.playerHP -= Math.round((opponentDmg + 5) * playerDefence);
+        console.log(`${this.opponentName}'s attack breaks through the parry!`);
+      } else {
+        console.log(`${this.opponentName}'s attack is parried by ${this.playerName}!`);
+      }
+
+      if (stuns) {
+        this.playerStunTurns = 1; // Last 1 turn
+        console.log(`${this.playerName} is stunned!`);
+      }
+    } else if (oType === 'attack' && pType === 'block') {
+      console.log(`${this.opponentName}'s attack is blocked by ${this.playerName}!`);
+    } else if (opponentAttackEligible) {
       const hit = Math.random() < this.attackHitChance;
       if (hit) {
         this.playerHP -= Math.round(opponentDmg * playerDefence);
@@ -605,20 +681,45 @@ class Game {
       }
     }
 
+    // Defensive actions are already logged above in the attack/parry logic
+
     // Items
     if (pType === 'item') {
       if (pSub === 'heal') this.playerHP += 20;
       if (pSub === 'speed') this.playerBuffs.speed = true;
       if (pSub === 'defence') this.playerBuffs.defence = true;
+      // Set cooldown for item actions
+      this.playerCooldowns[pA] = 3; // 3 turns cooldown
     }
     if (oType === 'item') {
       if (oSub === 'heal') this.opponentHP += 20;
       // For demo, opponent buffs not tracked
     }
 
+    // Set cooldown for heavy attack
+    if (pType === 'attack' && pSub === 'heavy') {
+      this.playerCooldowns[pA] = 2; // 2 turns cooldown for heavy attack
+    }
+
+    // Set cooldown for parry
+    if (pType === 'parry') {
+      this.playerCooldowns['parry'] = 1; // 1 turn cooldown for parry
+    }
+
     // Buffs last one turn
     this.playerBuffs.speed = false;
     this.playerBuffs.defence = false;
+
+    // Decrement cooldowns after resetting buffs
+    for (let action in this.playerCooldowns) {
+      if (this.playerCooldowns[action] > 0) {
+        this.playerCooldowns[action]--;
+      }
+    }
+
+    // Decrement stun turns
+    if (this.playerStunTurns > 0) this.playerStunTurns--;
+    if (this.opponentStunTurns > 0) this.opponentStunTurns--;
 
     // Clamp HP
     this.playerHP = Math.min(100, Math.max(0, this.playerHP));
@@ -630,6 +731,20 @@ class Game {
   }
 
   showGameOver() {
+    // Reset losing player's HP to 100
+    if (this.playerHP <= 0) this.playerHP = 100;
+    if (this.opponentHP <= 0) this.opponentHP = 100;
+
+    this.drawState();
+
+    if (this.isOnline) {
+      // Online: logic handled in onRoomUpdate
+    } else {
+      // Local: show game over buttons
+      if (typeof window !== 'undefined' && typeof window.__showGameOver === 'function') window.__showGameOver();
+    }
+
+    // Log result
     if(this.playerHP <= 0 && this.opponentHP <= 0) {
       console.log("Draw!");
     } else if(this.playerHP <= 0) {
@@ -637,21 +752,47 @@ class Game {
     } else {
       console.log("You win!");
       this.playerWins++;
-      // pseudo: leaderboard logic here
     }
-    // Host: show options to play again or stop (delete room)
-    try {
-      if (typeof document !== 'undefined' && this.isOnline && this.isHost) {
-        if (typeof window.__showEndButtons === 'function') {
-          window.__showEndButtons(true);
-        }
-      }
-    } catch (_) {}
   }
 
   // Removed reset logic, not needed in new UI
 
   async stopOnlineGame() {
+    if (!this.isOnline || !this.isHost) return;
+    try {
+      await this.deleteOnlineRoom();
+    } catch (_) {}
+    this.cleanupNetwork();
+    this.showMenu();
+    if (typeof window !== 'undefined' && typeof window.__resetToMenu === 'function') window.__resetToMenu();
+  }
+
+  async signalPlayAgain() {
+    if (!this.isOnline || !this.roomDocRef) return;
+    try {
+      await this.roomDocRef.update({
+        state: 'playing',
+        player1HP: 100,
+        player2HP: 100,
+        p1Action: '',
+        p2Action: '',
+        turn: 1,
+        updatedAt: Date.now()
+      });
+      this.playerHP = 100;
+      this.opponentHP = 100;
+      this.playerAction = null;
+      this.opponentAction = null;
+      this.state = 'playing';
+      this.drawState();
+      if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
+      if (typeof window !== 'undefined' && typeof window.__hideGameOver === 'function') window.__hideGameOver();
+    } catch (e) {
+      console.log('Kon niet opnieuw beginnen:', e);
+    }
+  }
+
+  async signalBackToMenu() {
     if (!this.isOnline || !this.isHost) return;
     try {
       await this.deleteOnlineRoom();
@@ -676,33 +817,48 @@ class Game {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
-    
+
+    // Disable buttons during animation to prevent stuck state
+    if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(false);
+
     this.lastPlayerActionDrawn = playerAction || '';
     this.lastOpponentActionDrawn = opponentAction || '';
     this.animationStartMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    
-    // Add particles for attacks
-    if (playerAction === 'attack') {
-      this.addParticles(140, 250, '#ef4444');
-    }
-    if (opponentAction === 'attack') {
-      this.addParticles(560, 250, '#ef4444');
-    }
-    
+
     // Use provided HP values or fall back to current HP (for cases where damage wasn't tracked)
     const beforePlayerHP = prevPlayerHP !== null ? prevPlayerHP : this.playerHP;
     const beforeOpponentHP = prevOpponentHP !== null ? prevOpponentHP : this.opponentHP;
-    
+
+    // Calculate damage for particles
+    const playerDamage = beforePlayerHP - this.playerHP;
+    const opponentDamage = beforeOpponentHP - this.opponentHP;
+
+    // Add particles for attacks
+    if (playerAction && playerAction.startsWith('attack')) {
+      this.addParticles(140, 250, '#ef4444');
+    }
+    if (opponentAction && opponentAction.startsWith('attack')) {
+      this.addParticles(560, 250, '#ef4444');
+    }
+
+    // Add more particles for impacts (damage dealt)
+    if (playerDamage > 0) {
+      this.addParticles(140, 250, '#ef4444', 12); // extra particles for impact
+    }
+    if (opponentDamage > 0) {
+      this.addParticles(560, 250, '#ef4444', 12); // extra particles for impact
+    }
+
     const step = () => {
       const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       const elapsed = now - this.animationStartMs;
       const progress = Math.min(1, elapsed / this.animationDurationMs);
-      
+
       if (progress < 1) {
         // Update particles and damage numbers
         this.updateParticles();
         this.updateDamageNumbers();
-        
+
         this.drawScene();
         this.animationFrameId = requestAnimationFrame(step);
       } else {
@@ -714,20 +870,19 @@ class Game {
         this.damageNumbers = [];
         this.animationFrameId = null;
         this.drawState();
+        // Re-enable buttons after animation completes
+        if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
       }
     };
-    
+
     // Show damage numbers after resolution
-    const playerDamage = beforePlayerHP - this.playerHP;
-    const opponentDamage = beforeOpponentHP - this.opponentHP;
-    
     if (playerDamage > 0) {
       this.addDamageNumber(140, 180, playerDamage, true);
     }
     if (opponentDamage > 0) {
       this.addDamageNumber(560, 180, opponentDamage, false);
     }
-    
+
     if (typeof requestAnimationFrame !== 'undefined') {
       this.animationFrameId = requestAnimationFrame(step);
     } else {
@@ -735,8 +890,8 @@ class Game {
     }
   }
   
-  addParticles(x, y, color) {
-    for (let i = 0; i < 8; i++) {
+  addParticles(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
       this.particles.push({
         x: x,
         y: y,
@@ -862,8 +1017,8 @@ class Game {
     if (pA === 'run') leftX -= 15 * e;
     if (oA === 'run') rightX += 15 * e;
 
-    this.drawStickFigure(leftX, baseY, 'right', pA, e);
-    this.drawStickFigure(rightX, baseY, 'left', oA, e);
+    this.drawStickFigure(leftX, baseY, 'right', pA, e, this.playerStunTurns > 0);
+    this.drawStickFigure(rightX, baseY, 'left', oA, e, this.opponentStunTurns > 0);
     
     // Draw particles
     this.drawParticles();
@@ -900,7 +1055,7 @@ class Game {
     });
   }
 
-  drawStickFigure(x, baseY, facing, action, animProgress = 0) {
+  drawStickFigure(x, baseY, facing, action, animProgress = 0, isStunned = false) {
     const ctx = this.ctx; if (!ctx) return;
     ctx.save();
     
@@ -938,6 +1093,15 @@ class Game {
     ctx.arc(x + bodyLean - 4, yHead + headR - 2, 2, 0, Math.PI * 2);
     ctx.arc(x + bodyLean + 4, yHead + headR - 2, 2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Stun stars above head
+    if (isStunned) {
+      ctx.fillStyle = '#fbbf24'; // yellow stars
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('★', x + bodyLean - 10, yHead - 5);
+      ctx.fillText('★', x + bodyLean + 10, yHead - 5);
+    }
     
     if (action === 'attack') {
       // Angry expression
