@@ -1,299 +1,565 @@
 <!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stick Fight Game</title>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stick Fight Demo</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #f7fafc 100%);
+      * { box-sizing: border-box; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Arial, sans-serif; 
         margin: 0;
-        padding: 0;
+        padding: 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
       }
       .container {
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
-        padding: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       }
       h2 {
-        text-align: center;
+        margin-top: 0;
         color: #4c1d95;
-        text-shadow: 0 2px 8px #a5b4fc44;
+        font-size: 28px;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 20px;
       }
-      .menu-buttons {
-        display: flex;
-        gap: 20px;
-        justify-content: center;
-        margin: 32px 0;
-      }
-      .menu-button {
-        padding: 15px 40px;
-        font-size: 18px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
-        color: #fff;
-        border: none;
-        box-shadow: 0 4px 16px #6366f133;
-        transition: background 0.2s, transform 0.2s;
-      }
-      .menu-button:hover {
-        background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
-        transform: scale(1.05);
-      }
-      .rooms-list {
-        background: #f8fafc;
-        border-radius: 12px;
-        padding: 16px;
-        margin: 20px 0;
-        max-height: 300px;
-        overflow-y: auto;
-      }
-      .room-item {
-        display: flex;
-        justify-content: space-between;
+      .row { 
+        display: flex; 
+        gap: 12px; 
+        margin-bottom: 16px; 
+        flex-wrap: wrap;
         align-items: center;
-        padding: 12px;
-        background: linear-gradient(90deg, #e0e7ff 0%, #f7fafc 100%);
-        margin-bottom: 8px;
-        border-radius: 8px;
-        border: 1px solid #6366f1;
-        color: #312e81;
       }
-      .room-item:hover {
+      button { 
+        padding: 12px 20px; 
+        font-size: 14px; 
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+      }
+      button:active:not(:disabled) {
+        transform: translateY(0);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: #9ca3af;
+        box-shadow: none;
+      }
+      input, select {
+        padding: 10px 14px;
+        font-size: 14px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        transition: border-color 0.3s ease;
+      }
+      input:focus, select:focus {
+        outline: none;
         border-color: #667eea;
       }
-      .host-setup {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
-        align-items: center;
-        margin: 20px 0;
+      #gameCanvas {
+        border: 2px solid #667eea;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #e0e7ff 0%, #f7f9fc 100%);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        display: block;
+        margin: 0 auto;
       }
-      #hostWait {
-        text-align: center;
-        margin-top: 24px;
-        display: none;
+      #log { 
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+        color: #e5ecff; 
+        padding: 16px; 
+        border-radius: 12px; 
+        min-height: 160px; 
+        white-space: pre-wrap;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+        max-height: 200px;
+        overflow-y: auto;
       }
-      .room-code-box {
-        background: linear-gradient(90deg, #fbbf24 0%, #f59e42 100%);
-        border-radius: 8px;
-        padding: 12px 24px;
-        margin: 16px auto 0 auto;
-        text-align: center;
-        font-size: 20px;
+      #log::-webkit-scrollbar {
+        width: 8px;
+      }
+      #log::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      #log::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+      }
+      #log::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+      .hp { 
         font-weight: bold;
-        color: #fff;
-        letter-spacing: 2px;
-        width: fit-content;
-        box-shadow: 0 2px 8px rgba(102,126,234,0.08);
-        animation: pulse 1.2s infinite alternate;
-      }
-      @keyframes pulse {
-        0% { box-shadow: 0 0 8px #fbbf24aa; }
-        100% { box-shadow: 0 0 24px #fbbf24cc; }
-      }
-      .waiting-status {
-        text-align: center;
-        margin-top: 18px;
         font-size: 16px;
-        color: #6366f1;
-        font-weight: 600;
-        animation: blink 1.2s infinite alternate;
-      }
-      @keyframes blink {
-        0% { opacity: 1; }
-        100% { opacity: 0.6; }
-      }
-      .room-item button {
-        background: linear-gradient(135deg, #f59e42 0%, #fbbf24 100%);
-        color: #fff;
-        font-weight: bold;
-        border: none;
+        color: #4c1d95;
+        padding: 12px;
+        background: rgba(102, 126, 234, 0.1);
         border-radius: 8px;
-        padding: 8px 18px;
-        font-size: 15px;
-        cursor: pointer;
-        transition: background 0.2s;
-        box-shadow: 0 2px 8px #fbbf2444;
+        margin-bottom: 12px;
       }
-      .room-item button:hover {
-        background: linear-gradient(135deg, #fbbf24 0%, #f59e42 100%);
+      #actAttack {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
       }
-      .host-setup input {
-        border: 2px solid #6366f1;
-        border-radius: 8px;
-        padding: 10px 16px;
-        font-size: 16px;
-        background: #f7fafc;
-        color: #312e81;
-        transition: border 0.2s;
+      #actBlock {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
       }
-      .host-setup input:focus {
-        border: 2px solid #fbbf24;
-        outline: none;
+      #actItem {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
       }
-      .host-setup button {
-        background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-size: 16px;
-        box-shadow: 0 2px 8px #6366f133;
-        transition: background 0.2s, transform 0.2s;
-      }
-      .host-setup button:hover {
-        background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
-        transform: scale(1.05);
+      #actRun {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
       }
     </style>
-</head>
-<body>
-  <div class="container">
+  </head>
+  <body>
+    <div class="container">
     <h2>Stick Fight</h2>
-    <!-- Hoofdmenu: alleen Host en Join -->
-    <div id="mainMenu">
-      <div class="menu-buttons">
-        <button id="btnHost" class="menu-button">Host Game</button>
-        <button id="btnJoin" class="menu-button">Join Game</button>
-      </div>
+    <div id="menuRow" class="row">
+      <input id="playerName" placeholder="Jouw naam" value="Speler" style="min-width:120px" />
+      <button id="btnHostOnline">Host Online</button>
+      <button id="btnJoinOnline">Join Online</button>
+      <button id="btnBack" disabled>Back</button>
     </div>
-    <!-- Host setup: naam kiezen en starten -->
-    <div id="hostSetup" style="display:none;">
-      <div class="host-setup">
-        <input id="playerName" placeholder="Jouw naam" value="Speler" />
-        <button id="btnStartHost">Start Game</button>
-        <button id="btnBackHost">Terug</button>
-      </div>
-      <div id="hostRoomCode" class="room-code-box" style="display:none;"></div>
-      <div id="hostWait" class="waiting-status" style="display:none;">
-        <span id="waitText">Wachten op speler...</span>
-      </div>
+    <div id="hostRow" class="row" style="display:none">
+      <input id="room" placeholder="Room code (bv. my-room)" />
+      <button id="btnStartHost">Start</button>
+      <button id="btnHostBack">Back</button>
     </div>
-    <!-- Join: naam kiezen en lijst met open games -->
-    <div id="joinSetup" style="display:none;">
-      <div class="host-setup">
-        <input id="joinPlayerName" placeholder="Jouw naam" value="Speler" />
-        <button id="btnRefreshRooms">Vernieuw Lijst</button>
-        <button id="btnBackJoin">Terug</button>
-      </div>
-      <div class="rooms-list" id="roomsList">
-        <div class="room-item">Klik 'Vernieuw Lijst' om games te zien</div>
-      </div>
+    <div id="waitingRow" class="row" style="display:none">
+      <span id="waitingMsg" style="font-size:18px;color:#4c1d95;">Wachten op speler...</span>
     </div>
-    <!-- Game area (canvas etc) -->
-    <div id="gameArea" style="display:none;">
-      <!-- ...existing game UI... -->
+    <div id="joinRow" class="row" style="display:none">
+      <button id="btnRefreshRooms">Refresh Rooms</button>
+      <select id="roomsList" style="min-width:240px">
+        <option value="">(geen open rooms)</option>
+      </select>
+      <button id="btnJoinRoom">Join</button>
+      <button id="btnJoinBack">Back</button>
     </div>
-  </div>
-  <script>
-    // ...existing Firebase setup...
-    (function() {
-      // ...existing code...
-      let currentRoomCode = null;
-      let hostGameStarted = false;
+    <div class="row" style="width:100%">
+      <canvas id="gameCanvas" width="700" height="320" style="border:1px solid #ccc; background:#f7f9fc; width:100%; max-width:820px"></canvas>
+    </div>
+    <div class="row">
+      <button id="actAttack" disabled>Attack</button>
+      <button id="actBlock" disabled>Block</button>
+      <button id="actItem" disabled>Item</button>
+      <button id="actRun" disabled>Run</button>
+      <!-- Sub-action buttons for attack -->
+      <button id="subAttackPunch" style="display:none">Punch</button>
+      <button id="subAttackKick" style="display:none">Kick</button>
+      <button id="subAttackUppercut" style="display:none">Uppercut</button>
+      <button id="subAttackSpecial" style="display:none">Special</button>
+      <!-- Sub-action buttons for item -->
+      <button id="subItemHeal" style="display:none">Heal</button>
+      <button id="subItemSpeed" style="display:none">Speed Boost</button>
+      <button id="subItemDefence" style="display:none">Defence Buff</button>
+    </div>
+    <div id="state" class="hp"></div>
+    <div id="log" aria-live="polite"></div>
+    </div>
 
-      function showMainMenu() {
-        document.getElementById('mainMenu').style.display = 'block';
-        document.getElementById('hostSetup').style.display = 'none';
-        document.getElementById('joinSetup').style.display = 'none';
-        document.getElementById('gameArea').style.display = 'none';
-        document.getElementById('hostRoomCode').style.display = 'none';
-        document.getElementById('hostWait').style.display = 'none';
-        hostGameStarted = false;
-      }
-      function showHostSetup() {
-        document.getElementById('mainMenu').style.display = 'none';
-        document.getElementById('hostSetup').style.display = 'block';
-        document.getElementById('hostRoomCode').style.display = 'none';
-        document.getElementById('hostWait').style.display = 'none';
-        hostGameStarted = false;
-      }
-      function showJoinSetup() {
-        document.getElementById('mainMenu').style.display = 'none';
-        document.getElementById('joinSetup').style.display = 'block';
-        refreshRooms();
-      }
-      document.getElementById('btnHost').onclick = showHostSetup;
-      document.getElementById('btnJoin').onclick = showJoinSetup;
-      document.getElementById('btnBackHost').onclick = showMainMenu;
-      document.getElementById('btnBackJoin').onclick = showMainMenu;
-
-      // Host game start
-      document.getElementById('btnStartHost').onclick = async function() {
-        if (hostGameStarted) return;
-        hostGameStarted = true;
-        const name = document.getElementById('playerName').value || 'Speler';
-        // Genereer een korte, duidelijke room code
-        const room = 'ROOM-' + Math.random().toString(36).substr(2, 5).toUpperCase();
-        currentRoomCode = room;
-        document.getElementById('hostRoomCode').textContent = `Room code: ${room}`;
-        document.getElementById('hostRoomCode').style.display = 'block';
-        document.getElementById('hostWait').style.display = 'block';
-        document.getElementById('waitText').textContent = 'Wachten op speler...';
-
-        if (!window.__db) {
-          document.getElementById('waitText').textContent = 'Firebase niet geinitialiseerd!';
-          return;
-        }
-        game = new Game(name);
-        // Start game, maar update UI direct zodat joiners de room kunnen zien
-        try {
-          await game.startOnline(window.__db, room, true);
-        } catch (e) {
-          document.getElementById('waitText').textContent = 'Er ging iets mis met het starten van de game!';
-          hostGameStarted = false;
-        }
+    <script src="Untitled-1.js"></script>
+    <!-- Firebase compat SDKs (global firebase.*) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+      // 1) Vul je Firebase config hieronder in (Project settings -> Your apps -> SDK setup and configuration)
+      // Voorbeeld:
+      // const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
+      const firebaseConfig = {
+        apiKey: "AIzaSyAs07dGS6aFqshNei3n2edxnaBLrSsfRvA",
+        authDomain: "stick-ficht.firebaseapp.com",
+        projectId: "stick-ficht",
+        storageBucket: "stick-ficht.firebasestorage.app",
+        messagingSenderId: "198218024025",
+        appId: "1:198218024025:web:b1ade6fd2ab57f6a42dd48",
+        measurementId: "G-JCY8JXHB1W"
       };
+      let db = null;
+      if (firebaseConfig) {
+        const app = firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore(app);
+        window.__db = db; // maak beschikbaar voor game code
+      }
+    </script>
+    <script>
+      (function() {
+        const logEl = document.getElementById('log');
+        const stateEl = document.getElementById('state');
+        const originalLog = console.log.bind(console);
+        console.log = function(...args) {
+          originalLog(...args);
+          const line = args.map(String).join(' ');
+          logEl.textContent += (logEl.textContent ? '\n' : '') + line;
+          logEl.scrollTop = logEl.scrollHeight;
+        };
 
-      // Rooms lijst
-      document.getElementById('btnRefreshRooms').onclick = refreshRooms;
-      async function refreshRooms() {
-        if (!window.__db) {
-          console.log('Firebase niet geinitialiseerd');
-          return;
+        const nameInput = document.getElementById('playerName');
+        function currentName() {
+          return document.getElementById('playerName').value || 'Speler';
         }
-        const roomsList = document.getElementById('roomsList');
-        roomsList.innerHTML = '<div class="room-item">Laden...</div>';
-        try {
-          const snap = await window.__db
-            .collection('rooms')
-            .where('state','==','matchmaking')
-            .orderBy('updatedAt','desc')
-            .limit(10)
-            .get();
-          if (snap.empty) {
-            roomsList.innerHTML = '<div class="room-item">Geen actieve games gevonden</div>';
+        let game = new Game(currentName());
+
+        // Update game.playerName live when changed
+        document.getElementById('playerName').addEventListener('input', function() {
+          if (game) {
+            game.playerName = this.value || 'Speler';
+            game.drawState();
+          }
+        });
+
+        // UI helpers
+        function showMenu() {
+          document.getElementById('menuRow').style.display = '';
+          document.getElementById('hostRow').style.display = 'none';
+          document.getElementById('waitingRow').style.display = 'none';
+          document.getElementById('joinRow').style.display = 'none';
+          document.getElementById('btnBack').disabled = true;
+        }
+        function showHost() {
+          document.getElementById('menuRow').style.display = 'none';
+          document.getElementById('hostRow').style.display = '';
+          document.getElementById('waitingRow').style.display = 'none';
+          document.getElementById('joinRow').style.display = 'none';
+          document.getElementById('btnBack').disabled = false;
+        }
+        function showWaiting() {
+          document.getElementById('menuRow').style.display = 'none';
+          document.getElementById('hostRow').style.display = 'none';
+          document.getElementById('waitingRow').style.display = '';
+          document.getElementById('joinRow').style.display = 'none';
+          document.getElementById('btnBack').disabled = false;
+        }
+        function showJoin() {
+          document.getElementById('menuRow').style.display = 'none';
+          document.getElementById('hostRow').style.display = 'none';
+          document.getElementById('waitingRow').style.display = 'none';
+          document.getElementById('joinRow').style.display = '';
+          document.getElementById('btnBack').disabled = false;
+        }
+        function hideAllMenus() {
+          document.getElementById('menuRow').style.display = 'none';
+          document.getElementById('hostRow').style.display = 'none';
+          document.getElementById('waitingRow').style.display = 'none';
+          document.getElementById('joinRow').style.display = 'none';
+        }
+        window.__resetToMenu = showMenu;
+
+        // Host Online flow
+        document.getElementById('btnHostOnline').onclick = function() {
+          showHost();
+        };
+        document.getElementById('btnStartHost').onclick = function() {
+          const room = document.getElementById('room').value || 'room-1';
+          if (!window.__db) {
+            console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
-          roomsList.innerHTML = '';
-          snap.forEach(doc => {
-            const data = doc.data();
-            const room = doc.id.replace(/^stickfight_/, '');
-            const el = document.createElement('div');
-            el.className = 'room-item';
-            el.innerHTML = `
-              <span><b>${room}</b> — Host: ${data.hostName || '?'} wacht op speler</span>
-              <button onclick="joinRoom('${room}')">Join Game</button>
-            `;
-            roomsList.appendChild(el);
-          });
-        } catch (e) {
-          roomsList.innerHTML = `<div class="room-item">Error: ${e.message || 'Onbekende fout'}</div>`;
+          game = new Game(currentName());
+          game.__waitingForJoin = true;
+          game.startOnline(window.__db, room, true);
+          showWaiting();
+        };
+        document.getElementById('btnHostBack').onclick = function() {
+          showMenu();
+        };
+
+        // Show waiting until opponent joins (called from Game when opponent joins)
+        window.__onOpponentJoined = function() {
+          hideAllMenus();
+        };
+
+        // Join Online flow
+        document.getElementById('btnJoinOnline').onclick = function() {
+          showJoin();
+          refreshRooms();
+        };
+        document.getElementById('btnRefreshRooms').onclick = refreshRooms;
+
+        async function refreshRooms() {
+          if (!window.__db) {
+            console.log('Firebase niet geinitialiseerd. Vul config in.');
+            return;
+          }
+          const select = document.getElementById('roomsList');
+          select.innerHTML = '';
+          try {
+            let snap;
+            try {
+              // Probeer met index
+              snap = await window.__db
+                .collection('rooms')
+                .where('state','==','matchmaking')
+                .orderBy('updatedAt','desc')
+                .limit(50)
+                .get();
+            } catch (err) {
+              // Fallback zonder index: haal alles op en filter/sorteer client-side
+              console.log('Firestore index ontbreekt, client-side filter/sort wordt gebruikt.');
+              snap = await window.__db.collection('rooms').limit(200).get();
+              const docs = snap.docs
+                .map(d => ({ id: d.id, data: d.data() }))
+                .filter(x => x.data && x.data.state === 'matchmaking')
+                .sort((a, b) => (b.data.updatedAt || 0) - (a.data.updatedAt || 0));
+              if (docs.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '(geen open rooms)';
+                select.appendChild(opt);
+              } else {
+                docs.forEach(({ id, data }) => {
+                  const roomId = id.replace(/^stickfight_/, '');
+                  const label = `${roomId} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
+                  const opt = document.createElement('option');
+                  opt.value = roomId;
+                  opt.textContent = label;
+                  select.appendChild(opt);
+                });
+              }
+              return;
+            }
+            let found = false;
+            if (!snap.empty) {
+              snap.forEach(doc => {
+                const data = doc.data();
+                const id = doc.id.replace(/^stickfight_/, '');
+                const label = `${id} — host: ${data.hostName || '?'} (turn ${data.turn || 1})`;
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = label;
+                select.appendChild(opt);
+                found = true;
+              });
+            }
+            if (!found) {
+              const opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = '(geen open rooms)';
+              select.appendChild(opt);
+            }
+          } catch (e) {
+            select.innerHTML = '';
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '(laden faalde)';
+            select.appendChild(opt);
+            console.log('Rooms laden faalde:', e && e.message ? e.message : e);
+          }
         }
-      }
-      window.joinRoom = function(room) {
-        const name = document.getElementById('joinPlayerName').value || 'Speler';
-        game = new Game(name);
-        game.startOnline(window.__db, room, false);
-        document.getElementById('joinSetup').style.display = 'none';
-        document.getElementById('gameArea').style.display = 'block';
-      };
-      // Start in hoofdmenu
-      showMainMenu();
-      // ...existing code...
-    })();
-  </script>
-</body>
-</html>
+
+        document.getElementById('roomsList').onchange = function() {
+          const val = this.value;
+          if (!val) return;
+          if (!window.__db) {
+            console.log('Vul eerst je Firebase config in (index.html).');
+            return;
+          }
+          game = new Game(currentName());
+          game.startOnline(window.__db, val, false);
+          hideAllMenus();
+        };
+
+        // Join room button
+        document.getElementById('btnJoinRoom').onclick = function() {
+          const select = document.getElementById('roomsList');
+          const val = select.value;
+          if (!val) return;
+          if (!window.__db) {
+            console.log('Vul eerst je Firebase config in (index.html).');
+            return;
+          }
+          game = new Game(currentName());
+          game.startOnline(window.__db, val, false);
+          hideAllMenus();
+        };
+
+        // Back button for joinRow
+        document.getElementById('btnJoinBack').onclick = function() {
+          showMenu();
+        };
+
+        document.getElementById('btnBack').onclick = async function() {
+          if (game && typeof game.onBack === 'function') {
+            await game.onBack();
+          }
+          showMenu();
+        };
+
+        // Local Create/Join removed
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+          game = new Game('Speler');
+          logEl.textContent = '';
+          updateState();
+        });
+
+        // Expose helpers for Game to toggle end-of-game buttons
+        window.__showEndButtons = function(show) {
+          btnPlayAgain.style.display = show ? '' : 'none';
+          btnStopGame.style.display = show ? '' : 'none';
+        };
+
+        btnPlayAgain.addEventListener('click', async () => {
+          if (game && typeof game.resetOnlineGame === 'function') {
+            await game.resetOnlineGame();
+            window.__showEndButtons(false);
+          }
+        });
+        btnStopGame.addEventListener('click', async () => {
+          if (game && typeof game.stopOnlineGame === 'function') {
+            await game.stopOnlineGame();
+            window.__showEndButtons(false);
+          }
+        });
+        document.getElementById('btnRefreshRooms').addEventListener('click', refreshRooms);
+        document.getElementById('btnUseSelected').addEventListener('click', () => {
+          const sel = document.getElementById('roomsList');
+          const val = sel.value;
+          if (val) document.getElementById('room').value = val;
+        });
+
+        ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+          document.getElementById(id).addEventListener('click', () => {
+            const map = { actAttack: 'attack', actBlock: 'block', actItem: 'item', actRun: 'run' };
+            const action = map[id];
+            game.submitAction(action);
+            updateState();
+          });
+        });
+
+        // Helpers for UI logic
+        window.__enableActions = function(enable) {
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enable;
+          });
+        };
+        window.__resetToMenu = function() {
+          // Hide sub-action buttons
+          ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial',
+           'subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          // Show main action buttons
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            document.getElementById(id).style.display = '';
+            document.getElementById(id).disabled = false;
+          });
+        };
+
+        // Show sub-actions for attack
+        document.getElementById('actAttack').addEventListener('click', () => {
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial'].forEach(id => {
+            document.getElementById(id).style.display = '';
+            document.getElementById(id).disabled = false;
+          });
+        });
+        // Show sub-actions for item
+        document.getElementById('actItem').addEventListener('click', () => {
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+            document.getElementById(id).style.display = '';
+            document.getElementById(id).disabled = false;
+          });
+        });
+
+        // Sub-action handlers for attack
+        document.getElementById('subAttackPunch').addEventListener('click', () => {
+          game.submitAction({ type: 'attack', sub: 'punch' });
+          window.__resetToMenu();
+        });
+        document.getElementById('subAttackKick').addEventListener('click', () => {
+          game.submitAction({ type: 'attack', sub: 'kick' });
+          window.__resetToMenu();
+        });
+        document.getElementById('subAttackUppercut').addEventListener('click', () => {
+          game.submitAction({ type: 'attack', sub: 'uppercut' });
+          window.__resetToMenu();
+        });
+        document.getElementById('subAttackSpecial').addEventListener('click', () => {
+          game.submitAction({ type: 'attack', sub: 'special' });
+          window.__resetToMenu();
+        });
+
+        // Sub-action handlers for item
+        document.getElementById('subItemHeal').addEventListener('click', () => {
+          game.submitAction({ type: 'item', sub: 'heal' });
+          window.__resetToMenu();
+        });
+        document.getElementById('subItemSpeed').addEventListener('click', () => {
+          game.submitAction({ type: 'item', sub: 'speed' });
+          window.__resetToMenu();
+        });
+        document.getElementById('subItemDefence').addEventListener('click', () => {
+          game.submitAction({ type: 'item', sub: 'defence' });
+          window.__resetToMenu();
+        });
+
+        // Enable/disable action buttons based on state (optimized with requestAnimationFrame)
+        let lastSyncTime = 0;
+        function syncControls() {
+          const now = performance.now();
+          if (now - lastSyncTime < 100) {
+            requestAnimationFrame(syncControls);
+            return; // Throttle to ~10fps for UI updates
+          }
+          lastSyncTime = now;
+          
+          // Enable buttons when playing and no action chosen yet
+          let enable = false;
+          if (!game.isOnline) {
+            // Local play: enable when playing and no action
+            enable = game.state === 'playing' && !game.playerAction;
+          } else {
+            // Online play
+            if (game.state === 'playing') {
+              // Both players can act when state is playing and they haven't chosen yet
+              enable = !game.playerAction;
+            }
+          }
+          
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enable;
+          });
+          stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+          requestAnimationFrame(syncControls);
+        }
+        requestAnimationFrame(syncControls);
+
+        updateState();
+      })();
+    </script>
+  </body>
+  </html>
+
