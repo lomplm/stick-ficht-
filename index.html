@@ -6,8 +6,8 @@
     <title>Stick Fight Demo</title>
     <style>
       * { box-sizing: border-box; }
-      body { 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Arial, sans-serif; 
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Arial, sans-serif;
         margin: 0;
         padding: 24px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -30,16 +30,16 @@
         text-align: center;
         margin-bottom: 20px;
       }
-      .row { 
-        display: flex; 
-        gap: 12px; 
-        margin-bottom: 16px; 
+      .row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
         flex-wrap: wrap;
         align-items: center;
       }
-      button { 
-        padding: 12px 20px; 
-        font-size: 14px; 
+      button {
+        padding: 12px 20px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         border: none;
@@ -81,12 +81,12 @@
         display: block;
         margin: 0 auto;
       }
-      #log { 
+      #log {
         background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-        color: #e5ecff; 
-        padding: 16px; 
-        border-radius: 12px; 
-        min-height: 160px; 
+        color: #e5ecff;
+        padding: 16px;
+        border-radius: 12px;
+        min-height: 160px;
         white-space: pre-wrap;
         font-family: 'Courier New', monospace;
         font-size: 13px;
@@ -109,7 +109,7 @@
       #log::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.5);
       }
-      .hp { 
+      .hp {
         font-weight: bold;
         font-size: 16px;
         color: #4c1d95;
@@ -141,6 +141,7 @@
     <h2>Stick Fight</h2>
     <div id="menuRow" class="row">
       <input id="playerName" placeholder="Jouw naam" value="Speler" style="min-width:120px" />
+      <button id="btnLocal">Local Play</button>
       <button id="btnHostOnline">Host Online</button>
       <button id="btnJoinOnline">Join Online</button>
       <button id="btnBack" disabled>Back</button>
@@ -188,9 +189,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script>
-      // 1) Vul je Firebase config hieronder in (Project settings -> Your apps -> SDK setup and configuration)
-      // Voorbeeld:
-      // const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..." };
+      // Firebase config
       const firebaseConfig = {
         apiKey: "AIzaSyAs07dGS6aFqshNei3n2edxnaBLrSsfRvA",
         authDomain: "stick-ficht.firebaseapp.com",
@@ -204,7 +203,7 @@
       if (firebaseConfig) {
         const app = firebase.initializeApp(firebaseConfig);
         db = firebase.firestore(app);
-        window.__db = db; // maak beschikbaar voor game code
+        window.__db = db;
       }
     </script>
     <script>
@@ -219,17 +218,18 @@
           logEl.scrollTop = logEl.scrollHeight;
         };
 
-        const nameInput = document.getElementById('playerName');
         function currentName() {
           return document.getElementById('playerName').value || 'Speler';
         }
-        let game = new Game(currentName());
+
+        // Initialize game
+        window.game = new Game(currentName());
 
         // Update game.playerName live when changed
         document.getElementById('playerName').addEventListener('input', function() {
-          if (game) {
-            game.playerName = this.value || 'Speler';
-            game.drawState();
+          if (window.game) {
+            window.game.playerName = this.value || 'Speler';
+            window.game.drawState();
           }
         });
 
@@ -270,6 +270,14 @@
         }
         window.__resetToMenu = showMenu;
 
+        // Local Play flow
+        document.getElementById('btnLocal').onclick = function() {
+          window.game = new Game(currentName());
+          window.game.startLocal();
+          hideAllMenus();
+          updateButtonStates();
+        };
+
         // Host Online flow
         document.getElementById('btnHostOnline').onclick = function() {
           showHost();
@@ -280,18 +288,20 @@
             console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
-          game = new Game(currentName());
-          game.__waitingForJoin = true;
-          game.startOnline(window.__db, room, true);
+          window.game = new Game(currentName());
+          window.game.__waitingForJoin = true;
+          window.game.startOnline(window.__db, room, true);
           showWaiting();
+          updateButtonStates();
         };
         document.getElementById('btnHostBack').onclick = function() {
           showMenu();
         };
 
-        // Show waiting until opponent joins (called from Game when opponent joins)
+        // Show waiting until opponent joins
         window.__onOpponentJoined = function() {
           hideAllMenus();
+          updateButtonStates();
         };
 
         // Join Online flow
@@ -311,7 +321,6 @@
           try {
             let snap;
             try {
-              // Probeer met index
               snap = await window.__db
                 .collection('rooms')
                 .where('state','==','matchmaking')
@@ -319,7 +328,6 @@
                 .limit(50)
                 .get();
             } catch (err) {
-              // Fallback zonder index: haal alles op en filter/sorteer client-side
               console.log('Firestore index ontbreekt, client-side filter/sort wordt gebruikt.');
               snap = await window.__db.collection('rooms').limit(200).get();
               const docs = snap.docs
@@ -379,12 +387,12 @@
             console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
-          game = new Game(currentName());
-          game.startOnline(window.__db, val, false);
+          window.game = new Game(currentName());
+          window.game.startOnline(window.__db, val, false);
           hideAllMenus();
+          updateButtonStates();
         };
 
-        // Join room button
         document.getElementById('btnJoinRoom').onclick = function() {
           const select = document.getElementById('roomsList');
           const val = select.value;
@@ -393,73 +401,109 @@
             console.log('Vul eerst je Firebase config in (index.html).');
             return;
           }
-          game = new Game(currentName());
-          game.startOnline(window.__db, val, false);
+          window.game = new Game(currentName());
+          window.game.startOnline(window.__db, val, false);
           hideAllMenus();
+          updateButtonStates();
         };
 
-        // Back button for joinRow
         document.getElementById('btnJoinBack').onclick = function() {
           showMenu();
         };
 
         document.getElementById('btnBack').onclick = async function() {
-          if (game && typeof game.onBack === 'function') {
-            await game.onBack();
+          if (window.game && typeof window.game.onBack === 'function') {
+            await window.game.onBack();
           }
           showMenu();
         };
 
-        // Local Create/Join removed
-
-        document.getElementById('btnReset').addEventListener('click', () => {
-          game = new Game('Speler');
-          logEl.textContent = '';
-          updateState();
-        });
-
-        // Expose helpers for Game to toggle end-of-game buttons
-        window.__showEndButtons = function(show) {
-          btnPlayAgain.style.display = show ? '' : 'none';
-          btnStopGame.style.display = show ? '' : 'none';
-        };
-
-        btnPlayAgain.addEventListener('click', async () => {
-          if (game && typeof game.resetOnlineGame === 'function') {
-            await game.resetOnlineGame();
-            window.__showEndButtons(false);
+        // Action button handlers
+        document.getElementById('actAttack').addEventListener('click', () => {
+          if (window.game.isOnline) {
+            // Show sub-actions for online play
+            ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+              document.getElementById(id).style.display = 'none';
+            });
+            ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial'].forEach(id => {
+              document.getElementById(id).style.display = 'inline-block';
+              document.getElementById(id).disabled = false;
+            });
+          } else {
+            // Direct action for local play
+            window.game.submitAction({ type: 'attack', sub: 'punch' });
+            updateButtonStates();
           }
         });
-        btnStopGame.addEventListener('click', async () => {
-          if (game && typeof game.stopOnlineGame === 'function') {
-            await game.stopOnlineGame();
-            window.__showEndButtons(false);
+
+        document.getElementById('actBlock').addEventListener('click', () => {
+          window.game.submitAction('block');
+          updateButtonStates();
+        });
+
+        document.getElementById('actItem').addEventListener('click', () => {
+          if (window.game.isOnline) {
+            // Show sub-actions for online play
+            ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+              document.getElementById(id).style.display = 'none';
+            });
+            ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+              document.getElementById(id).style.display = 'inline-block';
+              document.getElementById(id).disabled = false;
+            });
+          } else {
+            // Direct action for local play
+            window.game.submitAction({ type: 'item', sub: 'heal' });
+            updateButtonStates();
           }
         });
-        document.getElementById('btnRefreshRooms').addEventListener('click', refreshRooms);
-        document.getElementById('btnUseSelected').addEventListener('click', () => {
-          const sel = document.getElementById('roomsList');
-          const val = sel.value;
-          if (val) document.getElementById('room').value = val;
+
+        document.getElementById('actRun').addEventListener('click', () => {
+          window.game.submitAction('run');
+          updateButtonStates();
         });
 
-        ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-          document.getElementById(id).addEventListener('click', () => {
-            const map = { actAttack: 'attack', actBlock: 'block', actItem: 'item', actRun: 'run' };
-            const action = map[id];
-            game.submitAction(action);
-            updateState();
-          });
+        // Sub-action handlers for attack
+        document.getElementById('subAttackPunch').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'punch' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+        document.getElementById('subAttackKick').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'kick' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+        document.getElementById('subAttackUppercut').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'uppercut' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+        document.getElementById('subAttackSpecial').addEventListener('click', () => {
+          window.game.submitAction({ type: 'attack', sub: 'special' });
+          resetToMainActions();
+          updateButtonStates();
         });
 
-        // Helpers for UI logic
-        window.__enableActions = function(enable) {
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.disabled = !enable;
-          });
-        };
-        window.__resetToMenu = function() {
+        // Sub-action handlers for item
+        document.getElementById('subItemHeal').addEventListener('click', () => {
+          window.game.submitAction({ type: 'item', sub: 'heal' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+        document.getElementById('subItemSpeed').addEventListener('click', () => {
+          window.game.submitAction({ type: 'item', sub: 'speed' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+        document.getElementById('subItemDefence').addEventListener('click', () => {
+          window.game.submitAction({ type: 'item', sub: 'defence' });
+          resetToMainActions();
+          updateButtonStates();
+        });
+
+        // Helper functions
+        function resetToMainActions() {
           // Hide sub-action buttons
           ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial',
            'subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
@@ -468,124 +512,45 @@
           // Show main action buttons
           ['actAttack','actBlock','actItem','actRun'].forEach(id => {
             document.getElementById(id).style.display = '';
-            document.getElementById(id).disabled = false;
           });
-        };
-
-        // Show sub-actions for attack
-        document.getElementById('actAttack').addEventListener('click', () => {
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-            document.getElementById(id).style.display = 'none';
-          });
-          ['subAttackPunch','subAttackKick','subAttackUppercut','subAttackSpecial'].forEach(id => {
-            document.getElementById(id).style.display = '';
-            document.getElementById(id).disabled = false;
-          });
-        });
-        // Show sub-actions for item
-        document.getElementById('actItem').addEventListener('click', () => {
-          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
-            document.getElementById(id).style.display = 'none';
-          });
-          ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
-            document.getElementById(id).style.display = '';
-            document.getElementById(id).disabled = false;
-          });
-        });
-
-        // Sub-action handlers for attack
-        document.getElementById('subAttackPunch').addEventListener('click', () => {
-          game.submitAction({ type: 'attack', sub: 'punch' });
-          window.__resetToMenu();
-        });
-        document.getElementById('subAttackKick').addEventListener('click', () => {
-          game.submitAction({ type: 'attack', sub: 'kick' });
-          window.__resetToMenu();
-        });
-        document.getElementById('subAttackUppercut').addEventListener('click', () => {
-          game.submitAction({ type: 'attack', sub: 'uppercut' });
-          window.__resetToMenu();
-        });
-        document.getElementById('subAttackSpecial').addEventListener('click', () => {
-          game.submitAction({ type: 'attack', sub: 'special' });
-          window.__resetToMenu();
-        });
-
-        // Sub-action handlers for item
-        document.getElementById('subItemHeal').addEventListener('click', () => {
-          game.submitAction({ type: 'item', sub: 'heal' });
-          window.__resetToMenu();
-        });
-        document.getElementById('subItemSpeed').addEventListener('click', () => {
-          game.submitAction({ type: 'item', sub: 'speed' });
-          window.__resetToMenu();
-        });
-        document.getElementById('subItemDefence').addEventListener('click', () => {
-          game.submitAction({ type: 'item', sub: 'defence' });
-          window.__resetToMenu();
-        });
-
-    // Enable/disable action buttons based on state
-
-    let lastSyncTime = 0;
-
-    function syncControls() {
-
-      const now = performance.now();
-
-      if (now - lastSyncTime < 100) {
-
-        requestAnimationFrame(syncControls);
-
-        return; // Throttle to ~10fps for UI updates
-
-      }
-
-      lastSyncTime = now;
-
-      // Enable buttons when playing and no action chosen yet
-
-      let enable = false;
-
-      if (!game.isOnline) {
-
-        // Local play: enable when playing and no action
-
-        enable = game.state === 'playing' && !game.playerAction;
-
-      } else {
-
-        // Online play
-
-        if (game.state === 'playing' || game.state === 'matchmaking') {
-
-          // Both players can act when state is playing or matchmaking and they haven't chosen yet
-
-          enable = !game.playerAction;
-
         }
 
-      }
+        function updateButtonStates() {
+          if (!window.game) return;
 
-      ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+          let enable = false;
+          if (!window.game.isOnline) {
+            // Local play: enable when playing and no action chosen
+            enable = window.game.state === 'playing' && !window.game.playerAction;
+          } else {
+            // Online play: enable when playing or matchmaking and no action chosen
+            enable = (window.game.state === 'playing' || window.game.state === 'matchmaking') && !window.game.playerAction;
+          }
 
-        const el = document.getElementById(id);
+          ['actAttack','actBlock','actItem','actRun'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enable;
+          });
 
-        if (el) el.disabled = !enable;
+          // Update state display
+          stateEl.textContent = `State: ${window.game.state} | You: ${window.game.playerHP} HP vs Opponent: ${window.game.opponentHP} HP`;
+        }
 
-      });
+        // Initial state update
+        updateButtonStates();
 
-      stateEl.textContent = `State: ${game.state} | You: ${game.playerHP} HP vs Opponent: ${game.opponentHP} HP`;
+        // Periodic UI sync
+        setInterval(updateButtonStates, 100);
 
-      requestAnimationFrame(syncControls);
+        // Expose functions for Game class
+        window.__enableActions = updateButtonStates;
+        window.__resetToMenu = showMenu;
+        window.__onOpponentJoined = function() {
+          hideAllMenus();
+          updateButtonStates();
+        };
 
-    }
-
-    requestAnimationFrame(syncControls);
-
-        updateState();
       })();
     </script>
   </body>
-  </html>
-
+</html>

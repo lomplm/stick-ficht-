@@ -55,9 +55,17 @@ class Game {
   // Show start menu
   showMenu() {
     this.state = 'menu';
-    console.log("Menu: Host Online / Join Online / Back");
+    console.log("Menu: Local Play / Host Online / Join Online / Back");
     // UI code handled in index.html
     if (typeof window !== 'undefined' && typeof window.__resetToMenu === 'function') window.__resetToMenu();
+  }
+
+  // Start local play against AI
+  startLocal() {
+    this.state = 'playing';
+    this.opponentName = 'AI';
+    this.drawState();
+    if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
   }
 
   // Matchmaking (stub)
@@ -242,9 +250,39 @@ class Game {
     }
     if(this.state !== 'playing') return;
     if(this.playerAction && typeof action !== 'object') return; // already chosen
-    console.log(`${this.playerName} chooses ${this.playerAction}`);
-    this.send({ type: 'action', action: this.playerAction });
-    if(this.isHost) this.tryResolveTurn();
+    if(this.opponentName === 'AI') {
+      // AI chooses random action
+      this.opponentAction = this.randomAction();
+      console.log(`${this.playerName} chooses ${this.playerAction}`);
+      console.log(`${this.opponentName} chooses ${this.opponentAction}`);
+      // Resolve immediately
+      const beforeP = this.playerHP;
+      const beforeO = this.opponentHP;
+      this.resolveActions();
+      // Log deltas
+      const dSelf = this.playerHP - beforeP;
+      const dOpp = this.opponentHP - beforeO;
+      if (dOpp < 0) console.log(`${this.opponentName} verliest ${-dOpp} HP`);
+      if (dOpp > 0) console.log(`${this.opponentName} krijgt +${dOpp} HP`);
+      if (dSelf < 0) console.log(`Jij verliest ${-dSelf} HP`);
+      if (dSelf > 0) console.log(`Jij krijgt +${dSelf} HP`);
+      this.lastLoggedPlayerHP = this.playerHP;
+      this.lastLoggedOpponentHP = this.opponentHP;
+      this.startActionAnimation(this.playerAction, this.opponentAction, beforeP, beforeO);
+      if(this.playerHP <= 0 || this.opponentHP <= 0) {
+        this.state = 'gameover';
+        this.showGameOver();
+        return;
+      }
+      // Prepare next turn
+      this.playerAction = null;
+      this.opponentAction = null;
+      // Re-enable buttons after turn
+      if (typeof window !== 'undefined' && typeof window.__enableActions === 'function') window.__enableActions(true);
+    } else {
+      this.send({ type: 'action', action: this.playerAction });
+      if(this.isHost) this.tryResolveTurn();
+    }
   }
 
   tryResolveTurn() {
@@ -513,7 +551,7 @@ class Game {
   }
 
   randomAction() {
-    const actions = ['attack','block','item','run'];
+    const actions = ['attack_punch', 'attack_kick', 'attack_uppercut', 'attack_special', 'block', 'item_heal', 'item_speed', 'item_defence', 'run'];
     return actions[Math.floor(Math.random()*actions.length)];
   }
 
