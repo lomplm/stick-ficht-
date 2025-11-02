@@ -48,7 +48,9 @@ class Game {
     // Logging helpers to tonen alleen delta's
     this.lastLoggedPlayerHP = this.playerHP;
     this.lastLoggedOpponentHP = this.opponentHP;
-    this.playerBuffs = { speed: false, defence: false }; // track buffs
+    this.playerBuffs = { strength: false, defence: false }; // track buffs (deprecated, use durations)
+    this.playerBuffDurations = { strength: 0, defence: 0 }; // track buff durations in turns
+    this.playerBuffUsed = { strength: false, defence: false }; // track if buff was ever used for cooldown display
     this.playerCooldowns = {}; // track action cooldowns
     this.playerStunTurns = 0;
     this.opponentStunTurns = 0;
@@ -252,6 +254,12 @@ class Game {
     // Prevent action if stunned
     if (this.playerStunTurns > 0) {
       console.log(`${this.playerName} is stunned and cannot act!`);
+      return;
+    }
+
+    // Prevent action if on cooldown
+    if (this.playerCooldowns[fullAction] > 0) {
+      console.log(`${fullAction} is on cooldown for ${this.playerCooldowns[fullAction]} more turns!`);
       return;
     }
 
@@ -586,10 +594,43 @@ class Game {
     let oType = oA.split('_')[0];
     let oSub = oA.split('_')[1] || '';
 
+    // Items (apply first to set buffs)
+    if (pType === 'item') {
+      if (pSub === 'heal') this.playerHP += 20;
+      if (pSub === 'strength') {
+        this.playerBuffDurations.strength = 3; // Buff lasts 3 turns
+        this.playerBuffUsed.strength = true;
+      }
+      if (pSub === 'defence') {
+        this.playerBuffDurations.defence = 3; // Buff lasts 3 turns
+        this.playerBuffUsed.defence = true;
+      }
+      // Set cooldown for item actions
+      this.playerCooldowns[pA] = 4; // 4 turns cooldown
+    }
+    if (oType === 'item') {
+      if (oSub === 'heal') this.opponentHP += 20;
+      // For demo, opponent buffs not tracked
+    }
+
+    // Set cooldown for heavy attack
+    if (pType === 'attack' && pSub === 'heavy') {
+      this.playerCooldowns[pA] = 2; // 2 turns cooldown for heavy attack
+    }
+
+    // Set cooldown for parry
+    if (pType === 'parry') {
+      this.playerCooldowns['parry'] = 1; // 1 turn cooldown for parry
+    }
+
     // Buffs
-    let playerSpeed = this.playerBuffs.speed ? 1.5 : 1;
-    let playerDefence = this.playerBuffs.defence ? 0.5 : 1;
+    let playerSpeed = this.playerBuffDurations.strength > 0 ? 1.5 : 1;
+    let playerDefence = this.playerBuffDurations.defence > 0 ? 0.5 : 1;
     let opponentSpeed = 1, opponentDefence = 1; // For demo, only player gets buffs
+
+    // Apply defence buff always, enhanced when blocking
+    if (pType === 'block') playerDefence *= 0.6;
+    if (oType === 'block') opponentDefence = 0.6;
 
     // Attack logic
     const playerAttackEligible = pType === 'attack';
@@ -604,10 +645,6 @@ class Game {
     // Apply speed buff
     playerDmg = Math.round(playerDmg * playerSpeed);
     opponentDmg = Math.round(opponentDmg * opponentSpeed);
-
-    // Apply defence buff if blocking
-    if (pType === 'block') playerDefence = this.playerBuffs.defence ? 0.3 : 0.6;
-    if (oType === 'block') opponentDefence = 0.6;
 
     // Handle attacks against parry with stun and parry fail chances
     if (pType === 'attack' && oType === 'parry') {
@@ -688,39 +725,16 @@ class Game {
 
     // Defensive actions are already logged above in the attack/parry logic
 
-    // Items
-    if (pType === 'item') {
-      if (pSub === 'heal') this.playerHP += 20;
-      if (pSub === 'speed') this.playerBuffs.speed = true;
-      if (pSub === 'defence') this.playerBuffs.defence = true;
-      // Set cooldown for item actions
-      this.playerCooldowns[pA] = 3; // 3 turns cooldown
-    }
-    if (oType === 'item') {
-      if (oSub === 'heal') this.opponentHP += 20;
-      // For demo, opponent buffs not tracked
-    }
-
-    // Set cooldown for heavy attack
-    if (pType === 'attack' && pSub === 'heavy') {
-      this.playerCooldowns[pA] = 2; // 2 turns cooldown for heavy attack
-    }
-
-    // Set cooldown for parry
-    if (pType === 'parry') {
-      this.playerCooldowns['parry'] = 1; // 1 turn cooldown for parry
-    }
-
-    // Buffs last one turn
-    this.playerBuffs.speed = false;
-    this.playerBuffs.defence = false;
-
-    // Decrement cooldowns after resetting buffs
+    // Decrement cooldowns
     for (let action in this.playerCooldowns) {
       if (this.playerCooldowns[action] > 0) {
         this.playerCooldowns[action]--;
       }
     }
+
+    // Decrement buff durations
+    if (this.playerBuffDurations.strength > 0) this.playerBuffDurations.strength--;
+    if (this.playerBuffDurations.defence > 0) this.playerBuffDurations.defence--;
 
     // Decrement stun turns
     if (this.playerStunTurns > 0) this.playerStunTurns--;
@@ -1004,6 +1018,23 @@ class Game {
     ctx.font = '12px system-ui, Arial';
     ctx.fillText(`${this.playerHP} HP`, 42, 78);
     ctx.fillText(`${this.opponentHP} HP`, w - 218, 78);
+
+    // Draw buff icons and durations
+    if (this.playerBuffDurations.strength > 0) {
+      ctx.font = '24px Arial';
+      ctx.fillText('💪', 50, 110);
+      ctx.font = 'bold 14px system-ui, Arial';
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText(this.playerBuffDurations.strength, 75, 115);
+    }
+    if (this.playerBuffDurations.defence > 0) {
+      ctx.font = '24px Arial';
+      ctx.fillStyle = '#1f2937';
+      ctx.fillText('🛡️', 100, 110);
+      ctx.font = 'bold 14px system-ui, Arial';
+      ctx.fillStyle = '#2563eb';
+      ctx.fillText(this.playerBuffDurations.defence, 125, 115);
+    }
 
     // Stick figures positions with smooth animation
     const baseY = h - 40;

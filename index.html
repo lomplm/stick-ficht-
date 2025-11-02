@@ -180,7 +180,7 @@
       <button id="subAttackHeavy" style="display:none">Heavy Attack</button>
       <!-- Sub-action buttons for item -->
       <button id="subItemHeal" style="display:none">Heal</button>
-      <button id="subItemSpeed" style="display:none">Speed Boost</button>
+      <button id="subItemStrength" style="display:none">Strength Boost</button>
       <button id="subItemDefence" style="display:none">Defence Buff</button>
     </div>
     <div id="gameOverRow" class="row" style="display:none">
@@ -450,7 +450,7 @@
             document.getElementById(id).style.display = 'none';
           });
           document.getElementById('btnBackSub').style.display = 'inline-block';
-          ['subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+          ['subItemHeal','subItemStrength','subItemDefence'].forEach(id => {
             document.getElementById(id).style.display = 'inline-block';
             document.getElementById(id).disabled = false;
           });
@@ -487,8 +487,8 @@
           resetToMainActions();
           updateButtonStates();
         });
-        document.getElementById('subItemSpeed').addEventListener('click', () => {
-          window.game.submitAction({ type: 'item', sub: 'speed' });
+        document.getElementById('subItemStrength').addEventListener('click', () => {
+          window.game.submitAction({ type: 'item', sub: 'strength' });
           resetToMainActions();
           updateButtonStates();
         });
@@ -502,7 +502,7 @@
         function resetToMainActions() {
           // Hide sub-action buttons
           ['subAttackNormal','subAttackLight','subAttackHeavy',
-           'subItemHeal','subItemSpeed','subItemDefence'].forEach(id => {
+           'subItemHeal','subItemStrength','subItemDefence'].forEach(id => {
             document.getElementById(id).style.display = 'none';
           });
           // Hide back sub button
