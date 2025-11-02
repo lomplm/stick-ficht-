@@ -52,8 +52,12 @@ class Game {
     this.playerBuffDurations = { strength: 0, defence: 0 }; // track buff durations in turns
     this.playerBuffUsed = { strength: false, defence: false }; // track if buff was ever used for cooldown display
     this.playerCooldowns = {}; // track action cooldowns
+    this.opponentBuffDurations = { strength: 0, defence: 0 }; // track opponent buff durations
+    this.opponentCooldowns = {}; // track opponent action cooldowns
     this.playerStunTurns = 0;
     this.opponentStunTurns = 0;
+    this.opponentActionHistory = []; // track last 3 AI actions to avoid repetition
+    this.playerActionHistory = []; // track last 3 player actions for prediction
     this.initRenderer();
   }
 
@@ -264,6 +268,11 @@ class Game {
     }
 
     this.playerAction = fullAction;
+    // Track player action history
+    this.playerActionHistory.push(fullAction);
+    if (this.playerActionHistory.length > 3) {
+      this.playerActionHistory.shift(); // Keep only last 3 actions
+    }
     // Log preparation for defensive actions
     if (fullAction === 'block') {
       console.log(`${this.playerName} prepares to block!`);
@@ -274,13 +283,13 @@ class Game {
     }
     if(this.state !== 'playing') return;
     if(this.opponentName === 'AI') {
-      // AI chooses random action unless player blocks
+      // AI chooses smart action unless player blocks
       if (this.playerAction === 'block') {
         this.opponentAction = null;
         console.log(`${this.playerName} chooses ${this.playerAction}`);
         console.log(`${this.opponentName} does nothing`);
       } else {
-        this.opponentAction = this.randomAction();
+        this.opponentAction = this.chooseAIAction();
         console.log(`${this.playerName} chooses ${this.playerAction}`);
         console.log(`${this.opponentName} chooses ${this.opponentAction}`);
       }
@@ -571,8 +580,8 @@ class Game {
 
   // Show action choices to player, return selected action (replace with UI code)
   promptAction() {
-    // ("attack", "block", "item", "run")
-    const actions = ['attack','block','item','run'];
+    // ("attack", "block", "item")
+    const actions = ['attack','block','item'];
     // pseudo: present UI for selection
     const chosenAction = actions[Math.floor(Math.random() * actions.length)];
     console.log(`${this.playerName} chooses ${chosenAction}`);
@@ -582,6 +591,116 @@ class Game {
   randomAction() {
     const actions = ['attack_normal', 'attack_light', 'attack_heavy'];
     return actions[Math.floor(Math.random()*actions.length)];
+  }
+
+  // Improved AI decision making for better gameplay experience
+  chooseAIAction() {
+    // Check if AI is stunned
+    if (this.opponentStunTurns > 0) {
+      return null; // AI cannot act
+    }
+
+    // Available actions (excluding those on cooldown)
+    const availableActions = [];
+
+    // Attacks (check opponent cooldowns)
+    if (!this.opponentCooldowns['attack_normal']) availableActions.push('attack_normal');
+    if (!this.opponentCooldowns['attack_light']) availableActions.push('attack_light');
+    if (!this.opponentCooldowns['attack_heavy']) availableActions.push('attack_heavy');
+
+    // Block (no cooldown)
+    availableActions.push('block');
+
+    // Items (check opponent cooldowns)
+    if (!this.opponentCooldowns['item_heal']) availableActions.push('item_heal');
+    if (!this.opponentCooldowns['item_strength']) availableActions.push('item_strength');
+    if (!this.opponentCooldowns['item_defence']) availableActions.push('item_defence');
+
+    // Avoid repeating the last action to add variety
+    const lastAction = this.opponentActionHistory[this.opponentActionHistory.length - 1];
+    if (lastAction && availableActions.includes(lastAction)) {
+      availableActions.splice(availableActions.indexOf(lastAction), 1);
+    }
+
+    // Track AI action history
+    const chosenAction = this.chooseAIActionLogic(availableActions);
+    this.opponentActionHistory.push(chosenAction);
+    if (this.opponentActionHistory.length > 3) {
+      this.opponentActionHistory.shift(); // Keep only last 3 actions
+    }
+    return chosenAction;
+  }
+
+  chooseAIActionLogic(availableActions) {
+    // Basic strategy based on HP and player action
+    const aiHP = this.opponentHP;
+    const playerAction = this.playerAction;
+
+    // Predict player next action based on history
+    let predictedPlayerAttack = false;
+    if (this.playerActionHistory.length >= 2) {
+      const lastTwo = this.playerActionHistory.slice(-2);
+      if (lastTwo.every(a => a.startsWith('attack'))) {
+        predictedPlayerAttack = true; // Player likely to attack again
+      }
+    }
+
+    // Increase healing frequency: heal more often
+    if (aiHP < 70 && availableActions.includes('item_heal')) {
+      const healChance = aiHP < 50 ? 0.9 : 0.6; // Higher chance to heal when low HP
+      if (Math.random() < healChance) return 'item_heal';
+    }
+
+    // Use buffs aggressively - always use if available and not active
+    const hasStrengthBuff = this.opponentBuffDurations.strength > 0;
+    const hasDefenceBuff = this.opponentBuffDurations.defence > 0;
+    if (!hasStrengthBuff && availableActions.includes('item_strength')) {
+      return 'item_strength';
+    }
+    if (!hasDefenceBuff && availableActions.includes('item_defence')) {
+      return 'item_defence';
+    }
+
+    // React to player action and prediction: block if player attacks or likely to
+    if ((playerAction && playerAction.startsWith('attack') || predictedPlayerAttack) && availableActions.includes('block')) {
+      const blockChance = aiHP > 70 ? 0.3 : 0.7; // Slightly lower block chance
+      if (Math.random() < blockChance) {
+        return 'block';
+      }
+    }
+
+    // Favor attacks with more variety: choose different attack types randomly
+    if (availableActions.some(a => a.startsWith('attack'))) {
+      const attackActions = availableActions.filter(a => a.startsWith('attack'));
+      // Always have a chance to attack, especially with buffs or high HP
+      if (hasStrengthBuff || aiHP > 60 || Math.random() < 0.8) { // High chance to attack
+        return attackActions[Math.floor(Math.random() * attackActions.length)]; // Random attack type for variety
+      }
+    }
+
+    // Avoid attacks if player is blocking
+    if (playerAction === 'block' && availableActions.some(a => a.startsWith('attack'))) {
+      availableActions = availableActions.filter(a => !a.startsWith('attack'));
+    }
+
+    // Default: weighted random with emphasis on items and variety
+    if (availableActions.length > 0) {
+      const weightedActions = [];
+      availableActions.forEach(action => {
+        weightedActions.push(action); // Base
+        if (action.startsWith('attack')) {
+          weightedActions.push(action, action, action); // Triple weight for attacks, more variety
+        } else if (action === 'block') {
+          weightedActions.push(action);
+        } else if (action.startsWith('item')) {
+          weightedActions.push(action, action, action); // Triple weight for items to encourage buffs/healing
+        }
+      });
+      return weightedActions[Math.floor(Math.random() * weightedActions.length)];
+    }
+
+    // Fallback
+    return 'block';
   }
 
   // Action resolution logic
@@ -610,7 +729,14 @@ class Game {
     }
     if (oType === 'item') {
       if (oSub === 'heal') this.opponentHP += 20;
-      // For demo, opponent buffs not tracked
+      if (oSub === 'strength') {
+        this.opponentBuffDurations.strength = 3; // Buff lasts 3 turns
+      }
+      if (oSub === 'defence') {
+        this.opponentBuffDurations.defence = 3; // Buff lasts 3 turns
+      }
+      // Set cooldown for opponent item actions
+      this.opponentCooldowns[oA] = 4; // 4 turns cooldown
     }
 
     // Set cooldown for heavy attack
